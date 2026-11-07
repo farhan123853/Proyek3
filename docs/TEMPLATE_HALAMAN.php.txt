@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="id" dir="ltr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Judul Halaman — Joglo Masayu</title>
+  <meta name="description" content="Deskripsi halaman." />
+  <meta name="theme-color" content="#FAF3E3" />
+  <link rel="icon" type="image/png" href="images/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Lato:wght@300;400;700&family=Kaushan+Script&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="assets/css/app.css" />
+</head>
+
+<body class="page-villa">
+
+  <!-- Header injected by script.js -->
+  <div id="site-header"></div>
+
+  <main>
+    <!-- ==============================
+         KONTEN HALAMAN DI SINI
+         ============================== -->
+    <section class="container">
+      <h1 class="section-heading">Judul Halaman</h1>
+      <p class="body-text">Konten halaman.</p>
+    </section>
+  </main>
+
+  <!-- Footer injected by script.js -->
+  <div id="site-footer"></div>
+
+  <script src="script.js" defer></script>
+  <!-- JS khusus halaman ini (opsional) -->
+  <!-- <script src="assets/js/nama-halaman.js" defer></script> -->
+</body>
+
+</html>

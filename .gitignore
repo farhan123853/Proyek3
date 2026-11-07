@@ -1,0 +1,18 @@
+# === Konfigurasi (berisi kredensial) ===
+config/config.php
+.env
+
+# === Log ===
+*.log
+
+# === Cache ===
+cache/
+
+# === OS / Editor ===
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
