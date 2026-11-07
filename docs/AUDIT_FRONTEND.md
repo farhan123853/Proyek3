@@ -207,3 +207,51 @@ facilities (id): ['3 kamar tidur (2 king, 1 twin)', 'Pendopo besar', 'Kolam rena
 | `images/logo.png`        | 430.590 B |
 
 > **Catatan:** `logo-icon-dark.png` dan `logo-icon.png` memiliki hash identik.
+
+---
+
+## 8. Keputusan Desain & Spesifikasi Backend
+
+Berdasarkan fakta dan batasan frontend statis, disepakati aturan arsitektur berikut:
+
+### A. Lokasi dan Struktur File Halaman Baru
+- **Semua halaman PHP baru berada langsung di ROOT**: `daftar.php`, `login.php`, `logout.php`, `reservasi.php`, `reservasi-saya.php`, `cuaca.php`, `dashboard-pengelola.php`, `dashboard-pemilik.php`, `dashboard-admin.php`.
+- **Dilarang membuat subfolder `dashboard/`** untuk halaman web agar path relatif header/footer (`index.html`, `images/logo.png`) tidak rusak.
+- **Folder `api/` murni untuk endpoint JSON**: tidak memanggil header/footer HTML.
+- **Markup standar**: Menggunakan `<body class="page-villa">`, memuat `#site-header`, `#site-footer`, `style.css`, `assets/css/app.css`, dan `script.js` (defer). Tidak menggunakan atribut `data-i18n` pada halaman baru (semua teks langsung Bahasa Indonesia).
+
+### B. Skema Tabel `tipe_villa` (Disesuaikan dengan Data Asli)
+Tabel master villa diselaraskan dengan objek `VILLAS` di `script.js`:
+- `id` (INT AUTO_INCREMENT PK)
+- `nama` (VARCHAR 100) — misal: 'Joglo Wulung'
+- `slug` (VARCHAR 100 UNIQUE) — misal: 'joglo-wulung'
+- `kapasitas_standar` (INT) — kapasitas dasar tanpa extra bed
+- `kapasitas_maks` (INT) — batas maksimal tamu dengan extra bed
+- `harga_weekday` (DECIMAL 12,2) — tarif Senin s.d. Kamis
+- `harga_weekend` (DECIMAL 12,2) — tarif Jumat s.d. Minggu
+- `harga_extrabed` (DECIMAL 12,2) — tarif per extra bed per malam
+- `jumlah_unit` (INT DEFAULT 1) — ketersediaan fisik unit
+- `deskripsi` (TEXT)
+- `fasilitas` (JSON / TEXT)
+
+### C. Definisi Hari & Perhitungan Tarif
+- **Weekday**: Menginap pada hari **Senin, Selasa, Rabu, Kamis**.
+- **Weekend**: Menginap pada hari **Jumat, Sabtu, Minggu**.
+- **Estimasi Nilai Reservasi**:
+  $$\text{Estimasi Total} = (\text{malam\_weekday} \times \text{tarif\_weekday}) + (\text{malam\_weekend} \times \text{tarif\_weekend}) + (\text{extra\_bed} \times \text{tarif\_extrabed} \times \text{total\_malam})$$
+- **Snapshot Historis**: Nilai `malam_weekday`, `malam_weekend`, tarif per malam saat pemesanan, dan `estimasi_total` wajib disimpan ke tabel transaksi reservasi agar tidak terpengaruh perubahan harga di kemudian hari.
+- **Label Wajib**: Pada UI ringkasan dan dashboard, nilai ini wajib diberi keterangan/label: *"estimasi, bukan uang masuk aktual"*.
+
+### D. Aturan Validasi Tamu & Extra Bed
+- Jumlah tamu yang dipesan wajib $\le$ `kapasitas_maks`.
+- Jika jumlah tamu $>$ `kapasitas_standar`, maka selisihnya dihitung otomatis sebagai extra bed:
+  $$\text{jumlah extra bed} = \text{jumlah tamu} - \text{kapasitas\_standar}$$
+- Jika jumlah tamu $\le$ `kapasitas_standar`, biaya extra bed = 0.
+
+### E. Data Awal (Seed Database)
+Mengacu langsung pada objek `VILLAS` di `script.js`:
+1. **Joglo Wulung**: Kapasitas 2 std / 3 maks. Weekday: Rp 1.500.000, Weekend: Rp 2.000.000, Extra Bed: Rp 350.000.
+2. **Joglo Saren**: Kapasitas 4 std / 5 maks. Weekday: Rp 2.200.000, Weekend: Rp 2.900.000, Extra Bed: Rp 350.000.
+3. **Joglo Agung**: Kapasitas 6 std / 8 maks. Weekday: Rp 3.800.000, Weekend: Rp 4.800.000, Extra Bed: Rp 400.000.
+*(TODO: Konfirmasi ulang dengan pemilik villa apabila terdapat perbedaan tarif promosi atau tarif musiman).*
+
