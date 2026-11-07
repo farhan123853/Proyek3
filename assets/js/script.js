@@ -326,6 +326,23 @@ const VILLAS = [
   },
 ];
 
+/* ─── Active Villas Data (F-14: Database Fetch with VILLAS Fallback) ─── */
+let activeVillas = VILLAS;
+
+async function loadVillasFromApi() {
+  try {
+    const res = await fetch('api/villas.php');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        activeVillas = data;
+      }
+    }
+  } catch (e) {
+    // Tetap gunakan array fallback VILLAS bawaan bila terjadi gangguan koneksi
+  }
+}
+
 /* ══════════════════════════════════════════════════════════
    4. SHARED UTILITIES
    ══════════════════════════════════════════════════════════ */
@@ -402,12 +419,11 @@ function applyLanguage(lang) {
 
 function updateWhatsAppLinks() {
   const waUrl = `https://wa.me/${CONFIG.whatsappNumber}`;
-  // Header Pesan button
+  // Header & Mobile Pesan button diarahkan ke reservasi.php sesuai aturan 2e
   const headerPesan = document.getElementById('headerPesanBtn');
-  if (headerPesan) headerPesan.href = waUrl;
-  // Mobile Pesan
+  if (headerPesan) headerPesan.href = 'reservasi.php';
   const mobilePesan = document.getElementById('mobilePesanBtn');
-  if (mobilePesan) mobilePesan.href = waUrl;
+  if (mobilePesan) mobilePesan.href = 'reservasi.php';
   // Kontak section
   const kontakWa = document.getElementById('kontakWhatsAppBtn');
   if (kontakWa) kontakWa.href = waUrl;
@@ -435,7 +451,7 @@ function injectHeader() {
   if (!placeholder) return;
 
   const isVillaPage = document.body.classList.contains('page-villa');
-  const navBase = isVillaPage ? 'index.html' : '';
+  const navBase = isVillaPage ? 'index.php' : '';
 
   const navLinks = [
     { key: 'nav.tentang', href: `${navBase}#tentang`, id: 'nav-tentang' },
@@ -451,8 +467,8 @@ function injectHeader() {
   placeholder.innerHTML = `
     <header class="site-header ${isVillaPage ? 'is-scrolled' : 'is-transparent'}" id="siteHeader" role="banner">
       <div class="header-inner">
-        <a href="index.html" class="header-logo" aria-label="Joglo Masayu">
-          <img src="images/logo.png" alt="" class="header-logo-icon" width="auto" height="50" />
+        <a href="index.php" class="header-logo" aria-label="Joglo Masayu">
+          <img src="assets/images/logo.png" alt="" class="header-logo-icon" width="auto" height="50" />
           <span class="header-logo-text">Joglo Masayu</span>
         </a>
 
@@ -468,7 +484,7 @@ function injectHeader() {
             <span class="lang-switch-divider" aria-hidden="true"></span>
             <button class="lang-btn ${currentLang === 'en' ? 'is-active' : ''}" data-lang="en" type="button">EN</button>
           </div>
-          <a href="https://wa.me/${CONFIG.whatsappNumber}" id="headerPesanBtn" class="btn btn-ghost" target="_blank" rel="noopener" data-i18n="nav.pesan">${t('nav.pesan')}</a>
+          <a href="reservasi.php" id="headerPesanBtn" class="btn btn-ghost" data-i18n="nav.pesan">${t('nav.pesan')}</a>
           <button class="hamburger" id="hamburgerBtn" aria-expanded="false" aria-label="Buka menu navigasi" type="button">
             <span class="hamburger-line"></span>
             <span class="hamburger-line"></span>
@@ -485,7 +501,7 @@ function injectHeader() {
     `<li><a href="${l.href}" data-i18n="${l.key}" class="mobile-nav-link">${t(l.key)}</a></li>`
   ).join('')}
       </ul>
-      <a href="https://wa.me/${CONFIG.whatsappNumber}" id="mobilePesanBtn" class="btn btn-ghost" target="_blank" rel="noopener" data-i18n="nav.pesan">${t('nav.pesan')}</a>
+      <a href="reservasi.php" id="mobilePesanBtn" class="btn btn-ghost" data-i18n="nav.pesan">${t('nav.pesan')}</a>
     </nav>
   `;
 }
@@ -500,8 +516,8 @@ function injectFooter() {
       <div class="container">
         <div class="footer-inner">
           <div class="footer-brand">
-            <a href="index.html" class="footer-logo" aria-label="Joglo Masayu — beranda">
-              <img src="images/logo.png" alt="" class="footer-logo-icon" width="auto" height="72" />
+            <a href="index.php" class="footer-logo" aria-label="Joglo Masayu — beranda">
+              <img src="assets/images/logo.png" alt="" class="footer-logo-icon" width="auto" height="72" />
               <span class="footer-brand-text">Joglo Masayu</span>
             </a>
             <p class="footer-desc" data-i18n="footer.desc">${t('footer.desc')}</p>
@@ -510,10 +526,10 @@ function injectFooter() {
           <div>
             <p class="footer-col-title" data-i18n="footer.menu">${t('footer.menu')}</p>
             <ul class="footer-links">
-              <li><a href="index.html#tentang" data-i18n="nav.tentang">${t('nav.tentang')}</a></li>
-              <li><a href="index.html#villa"   data-i18n="nav.villa">${t('nav.villa')}</a></li>
-              <li><a href="index.html#galeri"  data-i18n="nav.galeri">${t('nav.galeri')}</a></li>
-              <li><a href="index.html#kontak"  data-i18n="nav.kontak">${t('nav.kontak')}</a></li>
+              <li><a href="index.php#tentang" data-i18n="nav.tentang">${t('nav.tentang')}</a></li>
+              <li><a href="index.php#villa"   data-i18n="nav.villa">${t('nav.villa')}</a></li>
+              <li><a href="index.php#galeri"  data-i18n="nav.galeri">${t('nav.galeri')}</a></li>
+              <li><a href="index.php#kontak"  data-i18n="nav.kontak">${t('nav.kontak')}</a></li>
             </ul>
           </div>
 
@@ -945,9 +961,9 @@ function renderVillaList() {
 
   list.innerHTML = '';
 
-  VILLAS.forEach((villa, i) => {
+  activeVillas.forEach((villa, i) => {
     const row = document.createElement('a');
-    row.href = `villa.html?id=${villa.slug}`;
+    row.href = `villa.php?id=${villa.slug}`;
     row.className = 'villa-row reveal' + (i > 0 ? ` reveal-delay-${Math.min(i, 3)}` : '');
     row.setAttribute('role', 'listitem');
     row.setAttribute('aria-label', `${villa.name} — ${villa.meta[currentLang]}`);
@@ -985,7 +1001,7 @@ function initVillaHover() {
   if (!stickyInner) return;
 
   stickyInner.innerHTML = '';
-  VILLAS.forEach((villa, i) => {
+  activeVillas.forEach((villa, i) => {
     const img = document.createElement('img');
     img.src = villa.photos[0];
     img.alt = villa.name;
@@ -1091,11 +1107,11 @@ function initBackButton() {
   backBtn.addEventListener('click', () => {
     // If referrer is same-origin homepage, go back; otherwise navigate
     const ref = document.referrer;
-    const sameOrigin = ref && new URL(ref).origin === window.location.origin && ref.includes('index.html');
+    const sameOrigin = ref && new URL(ref).origin === window.location.origin && ref.includes('index.php');
     if (sameOrigin) {
       history.back();
     } else {
-      window.location.href = 'index.html#villa';
+      window.location.href = 'index.php#villa';
     }
   });
 }
@@ -1110,7 +1126,7 @@ function renderVillaDetail() {
   if (!container) return;
 
   const id = getVillaIdFromURL();
-  const villa = VILLAS.find(v => v.id === id || v.slug === id);
+  const villa = activeVillas.find(v => v.id === id || v.slug === id);
 
   if (!villa) {
     renderVillaNotFound(container);
@@ -1125,7 +1141,6 @@ function renderVillaDetail() {
   currentVillaPhotos = villa.photos.map(src => ({ src, alt: villa.name }));
   currentMainPhotoIndex = 0;
 
-  const waMsg = encodeURIComponent(t('villa.wa.book').replace('{villa}', villa.name));
   const waAsk = encodeURIComponent(t('villa.wa.ask').replace('{villa}', villa.name));
   const waUrl = `https://wa.me/${CONFIG.whatsappNumber}?text=`;
 
@@ -1142,9 +1157,9 @@ function renderVillaDetail() {
   ).join('');
 
   // Other villas
-  const otherVillas = VILLAS.filter(v => v.id !== villa.id);
+  const otherVillas = activeVillas.filter(v => v.id !== villa.id);
   const otherCardsHTML = otherVillas.map(v =>
-    `<a href="villa.html?id=${v.slug}" class="villa-card">
+    `<a href="villa.php?id=${v.slug}" class="villa-card">
       <div class="villa-card-photo">
         <img src="${v.photos[0]}" alt="${v.name}" width="600" height="400" loading="lazy"/>
       </div>
@@ -1212,7 +1227,7 @@ function renderVillaDetail() {
           </div>
 
           <div class="villa-cta-row">
-            <a href="${waUrl}${waMsg}" class="btn btn-ghost" target="_blank" rel="noopener" data-i18n="villa.book">${t('villa.book')}</a>
+            <a href="reservasi.php?villa=${encodeURIComponent(villa.slug)}" class="btn btn-ghost" data-i18n="villa.book">${t('villa.book')}</a>
             <a href="${waUrl}${waAsk}" class="btn btn-ghost" target="_blank" rel="noopener" data-i18n="villa.ask">${t('villa.ask')}</a>
           </div>
         </div>
@@ -1244,7 +1259,7 @@ function renderVillaNotFound(container) {
     <div class="villa-not-found">
       <h2 data-i18n="villa.notfound.h">${t('villa.notfound.h')}</h2>
       <p data-i18n="villa.notfound.p">${t('villa.notfound.p')}</p>
-      <a href="index.html#villa" class="btn btn-ghost" data-i18n="villa.notfound.btn">${t('villa.notfound.btn')}</a>
+      <a href="index.php#villa" class="btn btn-ghost" data-i18n="villa.notfound.btn">${t('villa.notfound.btn')}</a>
     </div>
   `;
 }
@@ -1322,7 +1337,10 @@ function setMainPhoto(index, villa) {
    INIT — runs on both pages
    ══════════════════════════════════════════════════════════ */
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+
+  // Muat data villa terbaru dari api/villas.php (F-14), fallback ke VILLAS jika gagal
+  await loadVillasFromApi();
 
   // Detect language
   const stored = getStoredLang();
