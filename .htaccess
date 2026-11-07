@@ -1,0 +1,23 @@
+# ============================================================
+# Apache Configuration — Villa Joglo Masayu
+# Keamanan & Proteksi Folder Sensitif
+# ============================================================
+
+Options -Indexes
+
+# Lindungi folder internal agar tidak bisa diakses langsung lewat browser
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(config|includes|database|cache|docs)/ - [F,L,NC]
+</IfModule>
+
+# Blokir akses ke file sensitif
+<FilesMatch "^(config\.php|\.env|\.gitattributes|\.gitignore|schema\.sql|seed\.sql)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>

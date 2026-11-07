@@ -1,7 +1,561 @@
 /* ============================================================
    APP.CSS — Villa Joglo Masayu
-   Stylesheet tambahan untuk halaman PHP baru.
-   Komponen form, tabel, dashboard akan dibuat di tahap fitur.
+   Komponen tambahan: Form, Tabel, Dashboard, Alert, Status Bar, Widget Cuaca
+   Selaras dengan style.css (--gold, --teak, --cream, --sand, --wood)
    ============================================================ */
 
-/* (kosong — diisi saat implementasi fitur) */
+/* ─── User Status Bar (Logged-in Sub-Nav) ─────────────────── */
+.user-status-bar {
+  background: var(--sand);
+  border-bottom: 1px solid rgba(59, 36, 22, 0.15);
+  padding: 0.65rem 0;
+  font-size: 13.5px;
+  position: relative;
+  z-index: 100;
+}
+
+.user-status-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.user-status-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--teak);
+}
+
+.user-role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  border-radius: var(--radius-chip);
+  text-transform: uppercase;
+  background: var(--teak);
+  color: var(--cream);
+}
+
+.user-role-badge.badge-admin     { background: #7C2D12; color: #FEF3C7; }
+.user-role-badge.badge-pengelola { background: #1E3A8A; color: #DBEAFE; }
+.user-role-badge.badge-pemilik   { background: #14532D; color: #DCFCE7; }
+.user-role-badge.badge-pelanggan { background: var(--wood); color: var(--cream); }
+
+.user-status-links {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.user-status-link {
+  color: var(--teak);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: color var(--transition-link);
+}
+
+.user-status-link:hover {
+  color: var(--gold-dark);
+}
+
+.user-status-logout {
+  color: #B91C1C;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border: 1px solid #B91C1C;
+  border-radius: var(--radius-btn);
+  transition: all 0.3s ease;
+}
+
+.user-status-logout:hover {
+  background: #B91C1C;
+  color: #FFF;
+}
+
+/* ─── Flash Alerts ────────────────────────────────────────── */
+.flash-container {
+  margin-top: 1.25rem;
+}
+
+.alert {
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-btn);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 14.5px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+}
+
+.alert-success { background: #E8F5E9; color: #1B5E20; border-color: #A5D6A7; }
+.alert-danger  { background: #FFEBEE; color: #B71C1C; border-color: #FFCDD2; }
+.alert-warning { background: #FFF8E1; color: #F57F17; border-color: #FFE082; }
+.alert-info    { background: #E1F5FE; color: #01579B; border-color: #B3E5FC; }
+
+.alert-close {
+  background: none;
+  border: none;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.6;
+  padding: 0 4px;
+}
+.alert-close:hover { opacity: 1; }
+
+/* ─── Forms & Controls ────────────────────────────────────── */
+.form-card {
+  background: #FFFAF0;
+  border: 1px solid rgba(59, 36, 22, 0.16);
+  border-radius: var(--radius-img);
+  padding: clamp(1.5rem, 3vw, 2.5rem);
+  box-shadow: 0 4px 20px rgba(59, 36, 22, 0.05);
+  margin-bottom: 2rem;
+}
+
+.form-title {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(1.4rem, 2.2vw, 1.85rem);
+  color: var(--teak);
+  margin-bottom: 0.5rem;
+}
+
+.form-desc {
+  font-size: 14.5px;
+  color: var(--wood);
+  margin-bottom: 1.5rem;
+}
+
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-label {
+  display: block;
+  font-family: 'Lato', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teak);
+  margin-bottom: 0.4rem;
+}
+
+.form-label .required {
+  color: #B91C1C;
+}
+
+.form-control {
+  width: 100%;
+  padding: 12px 14px;
+  font-family: 'Lato', sans-serif;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--cream);
+  border: 1px solid rgba(59, 36, 22, 0.25);
+  border-radius: var(--radius-btn);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(227, 166, 0, 0.2);
+}
+
+.form-control[readonly],
+.form-control:disabled {
+  background: rgba(59, 36, 22, 0.06);
+  cursor: not-allowed;
+  color: rgba(43, 27, 20, 0.65);
+}
+
+.form-hint {
+  font-size: 12.5px;
+  color: var(--wood);
+  margin-top: 0.35rem;
+  line-height: 1.4;
+}
+
+.form-error {
+  font-size: 12.5px;
+  color: #B91C1C;
+  margin-top: 0.35rem;
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.form-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.75rem;
+  flex-wrap: wrap;
+}
+
+/* ─── Tables ──────────────────────────────────────────────── */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  margin-bottom: 2rem;
+  background: #FFFAF0;
+  border: 1px solid rgba(59, 36, 22, 0.14);
+  border-radius: var(--radius-img);
+  box-shadow: 0 2px 12px rgba(59, 36, 22, 0.04);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 14px;
+}
+
+.data-table th {
+  background: var(--sand);
+  color: var(--teak);
+  font-family: 'Lato', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(59, 36, 22, 0.16);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(59, 36, 22, 0.08);
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tr:hover td {
+  background: rgba(227, 166, 0, 0.04);
+}
+
+/* ─── Status Badges ───────────────────────────────────────── */
+.badge-status {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: var(--radius-chip);
+  font-family: 'Lato', sans-serif;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge-status.status-menunggu {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid #FCD34D;
+}
+
+.badge-status.status-dikonfirmasi {
+  background: #D1FAE5;
+  color: #065F46;
+  border: 1px solid #6EE7B7;
+}
+
+.badge-status.status-ditolak {
+  background: #FEE2E2;
+  color: #991B1B;
+  border: 1px solid #FCA5A5;
+}
+
+.badge-status.status-aktif {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.badge-status.status-nonaktif {
+  background: #F3F4F6;
+  color: #4B5563;
+}
+
+/* ─── Dashboard Stats & Cards ─────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: #FFFAF0;
+  border: 1px solid rgba(59, 36, 22, 0.14);
+  border-radius: var(--radius-img);
+  padding: 1.5rem;
+  box-shadow: 0 2px 10px rgba(59, 36, 22, 0.04);
+}
+
+.stat-card--highlight {
+  border-color: var(--gold);
+  background: linear-gradient(135deg, #FFFDF8 0%, #FAF3E3 100%);
+}
+
+.stat-card-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--wood);
+  margin-bottom: 0.35rem;
+}
+
+.stat-card-value {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(1.75rem, 2.5vw, 2.25rem);
+  color: var(--teak);
+  line-height: 1.2;
+}
+
+.stat-card-note {
+  font-size: 11.5px;
+  color: rgba(59, 36, 22, 0.65);
+  margin-top: 0.4rem;
+  line-height: 1.4;
+  font-style: italic;
+}
+
+/* ─── Filter & Search Bar ─────────────────────────────────── */
+.filter-bar {
+  background: var(--sand);
+  border: 1px solid rgba(59, 36, 22, 0.12);
+  border-radius: var(--radius-img);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.filter-form {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.filter-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teak);
+}
+
+/* ─── Button Sizes & Variants in app.css ──────────────────── */
+.btn-sm {
+  padding: 8px 14px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+.btn-danger {
+  border-color: #B91C1C;
+  color: #B91C1C;
+}
+.btn-danger:hover,
+.btn-danger:focus-visible {
+  background: #B91C1C;
+  color: #FFF;
+  border-color: #B91C1C;
+}
+
+.btn-success {
+  border-color: #047857;
+  color: #047857;
+}
+.btn-success:hover,
+.btn-success:focus-visible {
+  background: #047857;
+  color: #FFF;
+  border-color: #047857;
+}
+
+/* ─── Weather Widget Component ────────────────────────────── */
+.weather-widget {
+  background: #FFFAF0;
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-img);
+  padding: 1.5rem;
+  margin-block: 2rem;
+  box-shadow: 0 4px 18px rgba(59, 36, 22, 0.05);
+}
+
+.weather-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(59, 36, 22, 0.1);
+  flex-wrap: wrap;
+}
+
+.weather-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.25rem;
+  color: var(--teak);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.weather-source {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--wood);
+}
+
+.weather-source strong {
+  color: var(--gold-dark);
+}
+
+.weather-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1rem;
+}
+
+.weather-slot {
+  background: var(--cream);
+  border: 1px solid rgba(59, 36, 22, 0.12);
+  border-radius: var(--radius-btn);
+  padding: 0.85rem;
+  text-align: center;
+  transition: transform 0.2s ease;
+}
+
+.weather-slot:hover {
+  transform: translateY(-2px);
+  border-color: var(--gold);
+}
+
+.weather-slot-time {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--wood);
+  margin-bottom: 0.35rem;
+}
+
+.weather-slot-temp {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.5rem;
+  color: var(--teak);
+  line-height: 1.2;
+}
+
+.weather-slot-desc {
+  font-size: 12.5px;
+  color: var(--text);
+  margin-top: 0.25rem;
+  line-height: 1.3;
+}
+
+.weather-slot-meta {
+  font-size: 11px;
+  color: rgba(59, 36, 22, 0.65);
+  margin-top: 0.35rem;
+}
+
+.weather-fallback {
+  padding: 1.25rem;
+  background: var(--cream);
+  border-radius: var(--radius-btn);
+  color: var(--wood);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ─── Estimate Highlight Box ──────────────────────────────── */
+.estimate-box {
+  background: #FFFDF8;
+  border: 1px dashed var(--gold);
+  border-radius: var(--radius-btn);
+  padding: 1.25rem;
+  margin-block: 1rem;
+}
+
+.estimate-box-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--gold-dark);
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.estimate-box-value {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.85rem;
+  color: var(--teak);
+  display: block;
+}
+
+.estimate-disclaimer {
+  font-size: 12px;
+  color: rgba(59, 36, 22, 0.65);
+  font-style: italic;
+  margin-top: 0.35rem;
+  display: block;
+}
+
+/* ─── Responsive Adjustments ──────────────────────────────── */
+@media (max-width: 768px) {
+  .form-grid-2,
+  .form-grid-3 {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .filter-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
