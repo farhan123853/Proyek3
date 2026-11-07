@@ -1,0 +1,2 @@
+# Pastikan file sha256 selalu LF agar sha256sum tidak gagal karena \r
+docs/frontend.sha256 text eol=lf
