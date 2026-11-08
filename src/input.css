@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --cream: #FAF3E3;
+    --teak: #3B2416;
+    --wood: #6B4A2F;
+    --sand: #EFE0C0;
+    --gold: #E3A600;
+    --gold-dark: #B88400;
+    --green-dark: #2F4F3E;
+    --white: #FFFFFF;
+    --font-display: 'Playfair Display', Georgia, serif;
+    --font-body: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-script: 'Kaushan Script', cursive;
+    --header-h: 72px;
+    --header-h-scrolled: 64px;
+    --control-h: 40px;
+    --control-h-mobile: 44px;
+  }
+
+  body {
+    background-color: var(--cream);
+    color: var(--teak);
+    font-family: var(--font-body);
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    color: var(--teak);
+    margin-top: 0;
+  }
+}
+
+@layer components {
+  /* Toast Notification Container */
+  #toast-region {
+    position: fixed;
+    top: calc(var(--header-h) + 16px);
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 400px;
+    width: calc(100vw - 40px);
+    pointer-events: none;
+  }
+
+  .toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: 0 10px 25px -5px rgba(59, 36, 22, 0.15), 0 4px 10px rgba(0, 0, 0, 0.05);
+    border-left: 4px solid var(--gold);
+    color: var(--teak);
+    font-size: 14px;
+    line-height: 1.5;
+    transition: all 0.3s ease;
+    animation: toastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .toast.toast-sukses {
+    border-left-color: #2F4F3E;
+  }
+  .toast.toast-galat {
+    border-left-color: #C0392B;
+  }
+  .toast.toast-peringatan {
+    border-left-color: #E3A600;
+  }
+  .toast.toast-info {
+    border-left-color: #2980B9;
+  }
+
+  .toast-close {
+    background: none;
+    border: none;
+    padding: 2px;
+    margin-left: auto;
+    cursor: pointer;
+    color: var(--wood);
+    opacity: 0.6;
+    transition: opacity 0.2s;
+  }
+  .toast-close:hover {
+    opacity: 1;
+  }
+
+  /* Keyframe Animations */
+  @keyframes toastSlideIn {
+    from {
+      opacity: 0;
+      transform: translateX(30px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+  }
+
+  @keyframes toastSlideOut {
+    from {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(30px) scale(0.95);
+    }
+  }
+}
+

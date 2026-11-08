@@ -1,0 +1,20 @@
+{
+  "name": "website-villa-joglo-masayu",
+  "version": "1.0.0",
+  "description": "Website Villa Joglo Masayu - Media Promosi dan Reservasi Penginapan Arsitektur Joglo",
+  "scripts": {
+    "build": "tailwindcss -i ./src/input.css -o ./assets/css/tailwind.css --minify",
+    "watch": "tailwindcss -i ./src/input.css -o ./assets/css/tailwind.css --watch"
+  },
+  "keywords": [
+    "villa-joglo",
+    "masayu",
+    "php-native",
+    "tailwind"
+  ],
+  "author": "Farhan Malik Ibrahim & Abdullah Averouse Ibnu Sina",
+  "license": "ISC",
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}
