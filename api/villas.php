@@ -41,7 +41,10 @@ try {
 
     foreach ($rows as $row) {
         $slug = $row['slug'];
-        $fasilitasArr = json_decode($row['fasilitas'] ?? '[]', true) ?: [];
+        $fasilitasArrId = json_decode($row['fasilitas'] ?? '[]', true) ?: [];
+        $fasilitasArrEn = json_decode($row['fasilitas_en'] ?? '[]', true) ?: $fasilitasArrId;
+        $descId = $row['deskripsi'] ?? '';
+        $descEn = !empty($row['deskripsi_en']) ? $row['deskripsi_en'] : $descId;
 
         $numStr = str_pad((string)$num, 2, '0', STR_PAD_LEFT);
         $villas[] = [
@@ -82,12 +85,12 @@ try {
                 'en' => "Authentic architectural beauty of {$row['nama']}."
             ],
             'description' => [
-                'id' => $row['deskripsi'] ?? '',
-                'en' => $row['deskripsi'] ?? ''
+                'id' => $descId,
+                'en' => $descEn
             ],
             'facilities'  => [
-                'id' => $fasilitasArr,
-                'en' => $fasilitasArr
+                'id' => $fasilitasArrId,
+                'en' => $fasilitasArrEn
             ]
         ];
         $num++;

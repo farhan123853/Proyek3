@@ -76,7 +76,7 @@ $detailList = $stmtDetail->fetchAll();
 // Ambil list villa untuk dropdown filter
 $villasDropdown = $pdo->query("SELECT `id_tipe`, `nama` FROM `tipe_villa` ORDER BY `id_tipe` ASC")->fetchAll();
 
-$pageTitle = 'Dashboard Pemilik (Laporan & Statistik) — Villa Joglo Masayu';
+$pageTitle = t('dashboard.pemilik_title') . ' — Villa Joglo Masayu';
 $pageDesc  = 'Pantau statistik permohonan reservasi dan estimasi nilai transaksi terkonfirmasi.';
 $bodyClass = 'page-villa';
 
@@ -85,8 +85,8 @@ require_once __DIR__ . '/../includes/layout/head.php';
 
 <main class="container" style="padding-top: calc(var(--header-h-scrolled) + 3rem); padding-bottom: 5rem;">
   <div style="margin-bottom: 2rem;">
-    <p class="eyebrow">Laporan Eksekutif</p>
-    <h1 class="section-heading" style="margin-bottom: 0.5rem;">Dashboard Pemilik Villa</h1>
+    <p class="eyebrow"><?= t('dashboard.pemilik_title') ?></p>
+    <h1 class="section-heading" style="margin-bottom: 0.5rem;"><?= t('dashboard.pemilik_title') ?></h1>
     <p class="body-text">
       Ringkasan performa pemesanan dan estimasi nilai reservasi. Seluruh data disajikan secara read-only untuk kebutuhan evaluasi bisnis.
     </p>
@@ -95,7 +95,7 @@ require_once __DIR__ . '/../includes/layout/head.php';
   <!-- Kartu Highlight Estimasi Nilai Reservasi -->
   <div style="background: linear-gradient(135deg, #FFFAF0 0%, #FAF3E3 100%); border: 2px solid var(--gold); border-radius: var(--radius-img); padding: clamp(1.5rem, 3vw, 2.25rem); margin-bottom: 2rem; box-shadow: 0 4px 20px rgba(59,36,22,0.06);">
     <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold-dark); display: block; margin-bottom: 0.35rem;">
-      Estimasi Nilai Reservasi Terkonfirmasi
+      <?= t('dashboard.total_omzet') ?>
     </span>
     <div style="font-family: 'Playfair Display', serif; font-size: clamp(2.2rem, 4vw, 3.2rem); color: var(--teak); line-height: 1.15;">
       <?= format_rupiah($summary['total_estimasi_konfirmasi'] ?? 0) ?>
@@ -103,19 +103,19 @@ require_once __DIR__ . '/../includes/layout/head.php';
     
     <!-- LABEL WAJIB F-12 -->
     <div style="margin-top: 0.75rem; padding: 0.6rem 0.9rem; background: rgba(227, 166, 0, 0.12); border-left: 3px solid var(--gold); border-radius: 2px; font-size: 13px; color: var(--teak);">
-      <strong>Catatan Kepatuhan:</strong> Angka di atas merupakan <strong>estimasi, bukan uang masuk aktual</strong>. Pembayaran dan pencatatan kas fisik dikoordinasikan langsung bersama pihak pengelola villa di lokasi dan tidak termasuk dalam ruang lingkup sistem website.
+      <strong>Catatan Kepatuhan:</strong> <?= t('booking.estimation_notice') ?>
     </div>
   </div>
 
   <!-- Kartu Statistik Jumlah -->
   <div class="stats-grid">
     <div class="stat-card">
-      <span class="stat-card-label">Total Permintaan</span>
+      <span class="stat-card-label"><?= t('dashboard.total_reservasi') ?></span>
       <div class="stat-card-value"><?= (int)($summary['total_reservasi'] ?? 0) ?></div>
       <div class="stat-card-note">Seluruh status pemesanan</div>
     </div>
     <div class="stat-card">
-      <span class="stat-card-label">Terkonfirmasi</span>
+      <span class="stat-card-label"><?= t('dashboard.terkonfirmasi') ?></span>
       <div class="stat-card-value" style="color: #065F46;"><?= (int)($summary['total_konfirmasi'] ?? 0) ?></div>
       <div class="stat-card-note">Reservasi telah disetujui</div>
     </div>

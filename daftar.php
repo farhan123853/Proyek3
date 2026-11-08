@@ -83,13 +83,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'peran'       => $peran
         ]);
 
-        flash_set('success', 'Pendaftaran berhasil! Selamat datang di Villa Joglo Masayu.');
+        flash_set('success', t('auth.registration_success', ['nama' => $nama]));
         redirect('reservasi.php');
     }
 }
 
-$pageTitle = 'Pendaftaran Akun Pelanggan — Villa Joglo Masayu';
-$pageDesc  = 'Daftar akun pelanggan untuk melakukan reservasi villa joglo premium di Joglo Masayu.';
+$pageTitle = t('auth.register_title') . ' — Villa Joglo Masayu';
+$pageDesc  = t('auth.register_desc');
 $bodyClass = 'page-villa';
 
 require_once __DIR__ . '/includes/layout/head.php';
@@ -99,15 +99,15 @@ require_once __DIR__ . '/includes/layout/head.php';
   <div style="max-width: 540px; margin: 0 auto;">
 
     <div class="form-card">
-      <p class="eyebrow">Daftar Akun</p>
-      <h1 class="form-title">Registrasi Pelanggan</h1>
-      <p class="form-desc">Buat akun untuk mempermudah reservasi dan memantau status pesanan villa Anda.</p>
+      <p class="eyebrow"><?= t('auth.register_eyebrow') ?></p>
+      <h1 class="form-title"><?= t('auth.register_title') ?></h1>
+      <p class="form-desc"><?= t('auth.register_desc') ?></p>
 
       <form method="POST" action="daftar.php" novalidate>
         <?= csrf_field() ?>
 
         <div class="form-group">
-          <label class="form-label" for="nama">Nama Lengkap <span class="required">*</span></label>
+          <label class="form-label" for="nama"><?= t('auth.name_label') ?> <span class="required">*</span></label>
           <input type="text" id="nama" name="nama" class="form-control" value="<?= e($nama) ?>" required autocomplete="name" />
           <?php if (isset($errors['nama'])): ?>
             <div class="form-error"><?= e($errors['nama']) ?></div>
@@ -115,7 +115,7 @@ require_once __DIR__ . '/includes/layout/head.php';
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="email">Alamat Email <span class="required">*</span></label>
+          <label class="form-label" for="email"><?= t('auth.email_label') ?> <span class="required">*</span></label>
           <input type="email" id="email" name="email" class="form-control" value="<?= e($email) ?>" required autocomplete="email" />
           <?php if (isset($errors['email'])): ?>
             <div class="form-error"><?= e($errors['email']) ?></div>
@@ -123,7 +123,7 @@ require_once __DIR__ . '/includes/layout/head.php';
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="kontak">Nomor Kontak / WhatsApp <span class="required">*</span></label>
+          <label class="form-label" for="kontak"><?= t('auth.phone_label') ?> <span class="required">*</span></label>
           <input type="tel" id="kontak" name="kontak" class="form-control" value="<?= e($kontak) ?>" placeholder="Contoh: 081234567890" required autocomplete="tel" />
           <?php if (isset($errors['kontak'])): ?>
             <div class="form-error"><?= e($errors['kontak']) ?></div>
@@ -131,7 +131,7 @@ require_once __DIR__ . '/includes/layout/head.php';
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="password">Kata Sandi <span class="required">*</span></label>
+          <label class="form-label" for="password"><?= t('auth.password_label') ?> <span class="required">*</span></label>
           <input type="password" id="password" name="password" class="form-control" required autocomplete="new-password" />
           <div class="form-hint">Minimal 6 karakter.</div>
           <?php if (isset($errors['password'])): ?>
@@ -140,7 +140,7 @@ require_once __DIR__ . '/includes/layout/head.php';
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="konfirmasi_password">Konfirmasi Kata Sandi <span class="required">*</span></label>
+          <label class="form-label" for="konfirmasi_password"><?= t('account.confirm_new_password') ?> <span class="required">*</span></label>
           <input type="password" id="konfirmasi_password" name="konfirmasi_password" class="form-control" required autocomplete="new-password" />
           <?php if (isset($errors['konfirmasi_password'])): ?>
             <div class="form-error"><?= e($errors['konfirmasi_password']) ?></div>
@@ -148,12 +148,12 @@ require_once __DIR__ . '/includes/layout/head.php';
         </div>
 
         <div class="form-actions">
-          <button type="submit" class="btn btn-gold" style="width: 100%; justify-content: center;">Daftar Sekarang</button>
+          <button type="submit" class="btn btn-gold" style="width: 100%; justify-content: center;"><?= t('auth.btn_register') ?></button>
         </div>
       </form>
 
       <div style="margin-top: 1.5rem; text-align: center; font-size: 14px; color: var(--wood);">
-        Sudah memiliki akun? <a href="login.php" style="color: var(--gold-dark); font-weight: 700; text-decoration: underline;">Masuk di sini</a>
+        <?= t('auth.have_account') ?> <a href="login.php" style="color: var(--gold-dark); font-weight: 700; text-decoration: underline;"><?= t('auth.login_link') ?></a>
       </div>
     </div>
 

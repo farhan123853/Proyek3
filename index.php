@@ -4,7 +4,7 @@ $pageTitle = 'Joglo Masayu — Villa Joglo Premium di Jawa';
 $pageDesc  = 'Joglo Masayu menawarkan pengalaman menginap premium di villa joglo kayu jati autentik. Rasakan ketenangan dan keindahan arsitektur Jawa yang sesungguhnya.';
 ?>
 <!DOCTYPE html>
-<html lang="id" dir="ltr">
+<html lang="<?= get_active_lang() ?>" dir="ltr">
 
 <head>
   <meta charset="UTF-8" />
@@ -19,6 +19,7 @@ $pageDesc  = 'Joglo Masayu menawarkan pengalaman menginap premium di villa joglo
   <link
     href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;1,400&family=Lato:wght@300;400;700&family=Kaushan+Script&display=swap"
     rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/tailwind.css" />
   <link rel="stylesheet" href="assets/css/style.css" />
   <link rel="stylesheet" href="assets/css/app.css" />
   <link rel="stylesheet" href="assets/css/auth.css" />
@@ -28,6 +29,7 @@ $pageDesc  = 'Joglo Masayu menawarkan pengalaman menginap premium di villa joglo
 
   <!-- MASAYU_AUTH: data autentikasi untuk script.js -->
   <script>
+  window.MASAYU_LANG = <?= json_encode(get_active_lang()) ?>;
   window.MASAYU_AUTH = <?= json_encode([
       'login'     => is_logged_in(),
       'nama'      => is_logged_in() ? current_user_name() : '',

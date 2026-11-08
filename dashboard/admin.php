@@ -113,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $stmtAll = $pdo->query("SELECT * FROM `pengguna` ORDER BY `id_pengguna` ASC");
 $usersList = $stmtAll->fetchAll();
 
-$pageTitle = 'Dashboard Administrator — Villa Joglo Masayu';
+$pageTitle = t('dashboard.admin_title') . ' — Villa Joglo Masayu';
 $pageDesc  = 'Kelola akun staf, hak akses, dan pengaturan pengguna sistem Villa Joglo Masayu.';
 $bodyClass = 'page-villa';
 
@@ -122,8 +122,8 @@ require_once __DIR__ . '/../includes/layout/head.php';
 
 <main class="container" style="padding-top: calc(var(--header-h-scrolled) + 3rem); padding-bottom: 5rem;">
   <div style="margin-bottom: 2rem;">
-    <p class="eyebrow">Manajemen Akses Sistem</p>
-    <h1 class="section-heading" style="margin-bottom: 0.5rem;">Dashboard Administrator</h1>
+    <p class="eyebrow"><?= t('dashboard.admin_title') ?></p>
+    <h1 class="section-heading" style="margin-bottom: 0.5rem;"><?= t('dashboard.admin_title') ?></h1>
     <p class="body-text">
       Buat akun staf (Pengelola dan Pemilik), kelola status keaktifan, dan atur peran hak akses pengguna.
     </p>

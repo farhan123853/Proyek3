@@ -129,7 +129,7 @@ $statMenunggu = (int)$pdo->query("SELECT COUNT(*) FROM `reservasi` WHERE `status
 $statKonfirmasi = (int)$pdo->query("SELECT COUNT(*) FROM `reservasi` WHERE `status` = 'dikonfirmasi'")->fetchColumn();
 $statDitolak = (int)$pdo->query("SELECT COUNT(*) FROM `reservasi` WHERE `status` = 'ditolak'")->fetchColumn();
 
-$pageTitle = 'Dashboard Pengelola — Villa Joglo Masayu';
+$pageTitle = t('dashboard.pengelola_title') . ' — Villa Joglo Masayu';
 $pageDesc  = 'Kelola dan proses permintaan reservasi tamu Villa Joglo Masayu.';
 $bodyClass = 'page-villa';
 
@@ -139,8 +139,8 @@ require_once __DIR__ . '/../includes/layout/head.php';
 <main class="container" style="padding-top: calc(var(--header-h-scrolled) + 3rem); padding-bottom: 5rem;">
   <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
     <div>
-      <p class="eyebrow">Pengelolaan Operasional</p>
-      <h1 class="section-heading" style="margin-bottom: 0.5rem;">Dashboard Pengelola</h1>
+      <p class="eyebrow"><?= t('dashboard.pengelola_title') ?></p>
+      <h1 class="section-heading" style="margin-bottom: 0.5rem;"><?= t('dashboard.pengelola_title') ?></h1>
       <p class="body-text" style="margin-bottom: 0;">Kelola permohonan reservasi tamu dan pantau ketersediaan kamar.</p>
     </div>
   </div>
@@ -148,12 +148,12 @@ require_once __DIR__ . '/../includes/layout/head.php';
   <!-- Kartu Statistik -->
   <div class="stats-grid">
     <div class="stat-card <?= $statMenunggu > 0 ? 'stat-card--highlight' : '' ?>">
-      <span class="stat-card-label">Menunggu Konfirmasi</span>
+      <span class="stat-card-label"><?= t('dashboard.menunggu_konfirmasi') ?></span>
       <div class="stat-card-value" style="color: #92400E;"><?= $statMenunggu ?></div>
       <div class="stat-card-note">Perlu segera diproses</div>
     </div>
     <div class="stat-card">
-      <span class="stat-card-label">Telah Dikonfirmasi</span>
+      <span class="stat-card-label"><?= t('dashboard.terkonfirmasi') ?></span>
       <div class="stat-card-value" style="color: #065F46;"><?= $statKonfirmasi ?></div>
       <div class="stat-card-note">Jadwal tamu aktif</div>
     </div>
@@ -167,15 +167,15 @@ require_once __DIR__ . '/../includes/layout/head.php';
   <!-- Bar Penyaring Status -->
   <div class="filter-bar">
     <form method="GET" action="dashboard/pengelola.php" class="filter-form">
-      <span class="filter-label">Saring Status:</span>
+      <span class="filter-label"><?= t('common.filter') ?>:</span>
       <select name="status" class="form-control" style="width: auto; padding: 6px 12px; font-size: 13.5px;" onchange="this.form.submit()">
-        <option value="">Semua Status (<?= $statMenunggu + $statKonfirmasi + $statDitolak ?>)</option>
-        <option value="menunggu" <?= $filterStatus === 'menunggu' ? 'selected' : '' ?>>Menunggu (<?= $statMenunggu ?>)</option>
-        <option value="dikonfirmasi" <?= $filterStatus === 'dikonfirmasi' ? 'selected' : '' ?>>Dikonfirmasi (<?= $statKonfirmasi ?>)</option>
-        <option value="ditolak" <?= $filterStatus === 'ditolak' ? 'selected' : '' ?>>Ditolak (<?= $statDitolak ?>)</option>
+        <option value=""><?= t('common.all') ?> (<?= $statMenunggu + $statKonfirmasi + $statDitolak ?>)</option>
+        <option value="menunggu" <?= $filterStatus === 'menunggu' ? 'selected' : '' ?>><?= t('my_bookings.status_menunggu') ?> (<?= $statMenunggu ?>)</option>
+        <option value="dikonfirmasi" <?= $filterStatus === 'dikonfirmasi' ? 'selected' : '' ?>><?= t('my_bookings.status_dikonfirmasi') ?> (<?= $statKonfirmasi ?>)</option>
+        <option value="ditolak" <?= $filterStatus === 'ditolak' ? 'selected' : '' ?>><?= t('common.cancel') ?> (<?= $statDitolak ?>)</option>
       </select>
       <?php if ($filterStatus): ?>
-        <a href="dashboard/pengelola.php" class="btn btn-sm btn-ghost">Reset Filter</a>
+        <a href="dashboard/pengelola.php" class="btn btn-sm btn-ghost">Reset</a>
       <?php endif; ?>
     </form>
     <div style="font-size: 13px; color: var(--wood);">

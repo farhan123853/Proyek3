@@ -350,7 +350,21 @@ async function loadVillasFromApi() {
 /* ─── Language State ─────────────────────────────────────── */
 let currentLang = 'id';
 
+function getCookie(name) {
+  const match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
+  return match ? decodeURIComponent(match[3]) : null;
+}
+
+function setCookie(name, val, days = 365) {
+  const d = new Date();
+  d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+  document.cookie = `${name}=${encodeURIComponent(val)};expires=${d.toUTCString()};path=/;SameSite=Lax`;
+}
+
 function getStoredLang() {
+  if (window.MASAYU_LANG) return window.MASAYU_LANG;
+  const cLang = getCookie('masayu_lang');
+  if (cLang) return cLang;
   try {
     return localStorage.getItem('jm_lang') || null;
   } catch {
@@ -370,8 +384,16 @@ function t(key) {
 
 function applyLanguage(lang) {
   currentLang = lang;
+  setCookie('masayu_lang', lang, 365);
   setStoredLang(lang);
   document.documentElement.lang = lang;
+
+  // Cek apakah halaman memiliki banyak string PHP yang butuh reload
+  const hasClientI18n = document.querySelectorAll('[data-i18n]').length > 0;
+  if (!hasClientI18n) {
+    window.location.reload();
+    return;
+  }
 
   // Update meta title and description
   const isVillaPage = document.body.classList.contains('page-villa');

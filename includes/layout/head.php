@@ -10,7 +10,7 @@ $pageDesc  = $pageDesc  ?? 'Pengalaman menginap di villa joglo kayu jati autenti
 $bodyClass = $bodyClass ?? 'page-villa';
 ?>
 <!DOCTYPE html>
-<html lang="id" dir="ltr">
+<html lang="<?= get_active_lang() ?>" dir="ltr">
 
 <head>
   <meta charset="UTF-8" />
@@ -38,6 +38,7 @@ $bodyClass = $bodyClass ?? 'page-villa';
 
   <!-- MASAYU_AUTH: data autentikasi untuk script.js (header, dropdown, tombol Pesan) -->
   <script>
+  window.MASAYU_LANG = <?= json_encode(get_active_lang()) ?>;
   window.MASAYU_AUTH = <?= json_encode([
       'login'     => is_logged_in(),
       'nama'      => is_logged_in() ? current_user_name() : '',

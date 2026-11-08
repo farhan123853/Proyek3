@@ -146,8 +146,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$pageTitle = 'Formulir Reservasi — Villa Joglo Masayu';
-$pageDesc  = 'Ajukan pemesanan villa joglo premium di Joglo Masayu Sleman secara online.';
+$pageTitle = t('booking.title') . ' — Villa Joglo Masayu';
+$pageDesc  = t('booking.desc');
 $bodyClass = 'page-villa';
 $extraScripts = ['assets/js/reservasi.js'];
 
@@ -158,11 +158,9 @@ require_once __DIR__ . '/includes/layout/head.php';
   <div style="max-width: 760px; margin: 0 auto;">
 
     <div class="form-card">
-      <p class="eyebrow">Reservasi Online</p>
-      <h1 class="form-title">Pemesanan Villa Joglo</h1>
-      <p class="form-desc">
-        Pilih tipe villa, tanggal menginap, dan jumlah tamu. Ketersediaan unit akan diperiksa secara otomatis.
-      </p>
+      <p class="eyebrow"><?= t('booking.eyebrow') ?></p>
+      <h1 class="form-title"><?= t('booking.title') ?></h1>
+      <p class="form-desc"><?= t('booking.desc') ?></p>
 
       <?php if (isset($errors['ketersediaan'])): ?>
         <div class="alert alert-danger" role="alert">
@@ -183,7 +181,7 @@ require_once __DIR__ . '/includes/layout/head.php';
         <?= csrf_field() ?>
 
         <div class="form-group">
-          <label class="form-label" for="id_tipe">Pilih Tipe Villa <span class="required">*</span></label>
+          <label class="form-label" for="id_tipe"><?= t('booking.villa_label') ?> <span class="required">*</span></label>
           <select id="id_tipe" name="id_tipe" class="form-control" required>
             <?php foreach ($villasList as $v): ?>
               <option value="<?= e($v['id_tipe']) ?>"
@@ -192,7 +190,7 @@ require_once __DIR__ . '/includes/layout/head.php';
                       data-weekday="<?= e($v['harga_weekday']) ?>"
                       data-weekend="<?= e($v['harga_weekend']) ?>"
                       <?= ($idTipe === (int)$v['id_tipe']) ? 'selected' : '' ?>>
-                <?= e($v['nama']) ?> — Mulai <?= format_rupiah($v['harga_weekday']) ?> / malam (Kapasitas: <?= e($v['kapasitas_standar']) ?>-<?= e($v['kapasitas_maks']) ?> tamu)
+                <?= e($v['nama']) ?> — <?= format_rupiah($v['harga_weekday']) ?> / <?= t('common.night') ?> (<?= t('common.guests') ?>: <?= e($v['kapasitas_standar']) ?>-<?= e($v['kapasitas_maks']) ?>)
               </option>
             <?php endforeach; ?>
           </select>
@@ -203,7 +201,7 @@ require_once __DIR__ . '/includes/layout/head.php';
 
         <div class="form-grid-2">
           <div class="form-group">
-            <label class="form-label" for="tanggal_checkin">Tanggal Check-In <span class="required">*</span></label>
+            <label class="form-label" for="tanggal_checkin"><?= t('booking.checkin_label') ?> <span class="required">*</span></label>
             <input type="date" id="tanggal_checkin" name="tanggal_checkin" class="form-control" value="<?= e($checkin) ?>" required />
             <div class="form-hint">Waktu check-in mulai 14.00 WIB.</div>
             <?php if (isset($errors['tanggal_checkin'])): ?>
@@ -212,7 +210,7 @@ require_once __DIR__ . '/includes/layout/head.php';
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="tanggal_checkout">Tanggal Check-Out <span class="required">*</span></label>
+            <label class="form-label" for="tanggal_checkout"><?= t('booking.checkout_label') ?> <span class="required">*</span></label>
             <input type="date" id="tanggal_checkout" name="tanggal_checkout" class="form-control" value="<?= e($checkout) ?>" required />
             <div class="form-hint">Waktu check-out maksimal 12.00 WIB.</div>
             <?php if (isset($errors['tanggal_checkout'])): ?>
@@ -222,7 +220,7 @@ require_once __DIR__ . '/includes/layout/head.php';
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="jumlah_tamu">Jumlah Tamu <span class="required">*</span></label>
+          <label class="form-label" for="jumlah_tamu"><?= t('booking.guests_label') ?> <span class="required">*</span></label>
           <input type="number" id="jumlah_tamu" name="jumlah_tamu" class="form-control" value="<?= e($jumlahTamu) ?>" min="1" max="10" required />
           <div class="form-hint" id="tamuHint">Tamu melebihi kapasitas standar akan dikenakan biaya extra bed per malam.</div>
           <?php if (isset($errors['jumlah_tamu'])): ?>
@@ -231,45 +229,45 @@ require_once __DIR__ . '/includes/layout/head.php';
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="catatan">Catatan / Permintaan Khusus (Opsional)</label>
+          <label class="form-label" for="catatan"><?= t('booking.special_requests') ?></label>
           <textarea id="catatan" name="catatan" class="form-control" rows="3" placeholder="Contoh: Perkiraan waktu tiba pukul 15.00 WIB, mohon disiapkan extra bed."><?= e($catatan) ?></textarea>
         </div>
 
         <!-- Box Rincian Estimasi Biaya Real-time -->
         <div id="reservasiPreviewBox" class="estimate-box" style="display: none;">
-          <span class="estimate-box-label">Rincian Durasi & Estimasi Biaya</span>
+          <span class="estimate-box-label"><?= t('booking.price_summary') ?></span>
           
           <div style="font-size: 14px; margin-bottom: 0.5rem; color: var(--wood);">
             Durasi: <strong id="previewTotalMalam" style="color: var(--teak);">-</strong>
           </div>
 
           <div style="display: flex; justify-content: space-between; font-size: 13.5px; padding: 4px 0; border-bottom: 1px dashed rgba(59,36,22,0.1);">
-            <span>Subtotal Malam Weekday (Senin-Kamis):</span>
+            <span>Subtotal Malam Weekday:</span>
             <strong id="previewSubtotalWeekday">-</strong>
           </div>
 
           <div style="display: flex; justify-content: space-between; font-size: 13.5px; padding: 4px 0; border-bottom: 1px dashed rgba(59,36,22,0.1);">
-            <span>Subtotal Malam Weekend (Jumat-Minggu):</span>
+            <span>Subtotal Malam Weekend:</span>
             <strong id="previewSubtotalWeekend">-</strong>
           </div>
 
           <div id="previewExtraBedRow" style="display: none; justify-content: space-between; font-size: 13.5px; padding: 4px 0; border-bottom: 1px dashed rgba(59,36,22,0.1);">
-            <span id="previewExtraBedInfo">Biaya Extra Bed:</span>
+            <span id="previewExtraBedInfo"><?= t('booking.extrabed_total') ?>:</span>
             <strong id="previewSubtotalExtra">-</strong>
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 0.75rem;">
-            <span style="font-size: 15px; font-weight: 700; color: var(--teak);">Estimasi Total:</span>
+            <span style="font-size: 15px; font-weight: 700; color: var(--teak);"><?= t('booking.total_estimation') ?>:</span>
             <span class="estimate-box-value" id="previewEstimasiTotal">-</span>
           </div>
 
           <small class="estimate-disclaimer">
-            * Catatan: Nilai ini merupakan estimasi perhitungan tarif menginap, bukan tanda bukti penerimaan uang masuk aktual. Pembayaran dan konfirmasi akhir dikoordinasikan langsung bersama pihak pengelola villa.
+            * <?= t('booking.estimation_notice') ?>
           </small>
         </div>
 
         <div class="form-actions">
-          <button type="submit" class="btn btn-gold" style="width: 100%; justify-content: center;">Ajukan Permintaan Reservasi</button>
+          <button type="submit" class="btn btn-gold" style="width: 100%; justify-content: center;"><?= t('booking.btn_submit') ?></button>
         </div>
       </form>
     </div>
