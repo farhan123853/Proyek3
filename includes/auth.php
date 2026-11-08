@@ -52,20 +52,16 @@ function logout_user(): void
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
-    $_SESSION = [];
-    if (ini_get('session.use_cookies')) {
-        $params = session_get_cookie_params();
-        setcookie(
-            session_name(),
-            '',
-            time() - 42000,
-            $params['path'],
-            $params['domain'],
-            $params['secure'],
-            $params['httponly']
-        );
-    }
-    session_destroy();
+    // Hapus seluruh data autentikasi pengguna
+    unset(
+        $_SESSION['user_id'],
+        $_SESSION['user_name'],
+        $_SESSION['user_email'],
+        $_SESSION['user_kontak'],
+        $_SESSION['user_role']
+    );
+    // Regenerasi session ID baru yang bersih dan aman dari session fixation
+    session_regenerate_id(true);
 }
 
 /**
@@ -111,3 +107,4 @@ function require_role($roles, string $unauthorizedRedirect = 'index.php'): void
         redirect($unauthorizedRedirect);
     }
 }
+

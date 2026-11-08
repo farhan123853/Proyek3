@@ -57,3 +57,4 @@ Dokumen ini mencatat daftar perbedaan dan penyesuaian antara naskah Proposal Pro
   - Kode wilayah Sukoharjo, Ngaglik, Sleman berdasarkan Kepmendagri 100.1.1-6117 Tahun 2022: `34.04.05.2003`.
 - **Penerapan Keamanan & Keandalan:**
   Sistem memanggil API BMKG melalui backend PHP (`api/cuaca.php`) dengan cURL berbatas waktu (timeout 5 detik), menerapkan cache lokal selama 1 jam di `cache/cuaca.json`, dan menyajikan pesan alternatif informatif jika API eksternal sedang tidak dapat dijangkau.
+

@@ -43,3 +43,4 @@ require_once __DIR__ . '/includes/layout/head.php';
 </main>
 
 <?php require_once __DIR__ . '/includes/layout/foot.php'; ?>
+

@@ -152,3 +152,4 @@ function format_cuaca_item(array $raw): ?array
         'jarak_pandang'=> $raw['vs_text'] ?? ''
     ];
 }
+

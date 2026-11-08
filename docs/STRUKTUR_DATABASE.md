@@ -158,3 +158,4 @@ WHERE `id_tipe` = :id_tipe
   AND `tanggal_checkout` > :checkin_baru;
 ```
 Jika jumlah reservasi terkonfirmasi yang bentrok $\ge \text{jumlah\_unit}$, maka sistem menyatakan unit **tidak tersedia** (penuh).
+

@@ -44,3 +44,4 @@ function get_db(): PDO
 
     return $pdo;
 }
+

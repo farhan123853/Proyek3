@@ -65,3 +65,4 @@ INSERT INTO `reservasi` (`id_reservasi`, `id_pelanggan`, `id_tipe`, `diproses_ol
 (4, 5, 3, 2, '2026-12-07', '2026-12-10', 6, 'Liburan keluarga akhir tahun.', 'dikonfirmasi', 3800000.00, 4800000.00, 400000.00, 11400000.00, NOW() - INTERVAL 1 DAY);
 
 SET FOREIGN_KEY_CHECKS = 1;
+

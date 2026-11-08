@@ -21,37 +21,24 @@ $pageDesc  = 'Detail villa joglo premium di Joglo Masayu. Temukan villa yang ses
     rel="stylesheet" />
   <link rel="stylesheet" href="assets/css/style.css" />
   <link rel="stylesheet" href="assets/css/app.css" />
+  <link rel="stylesheet" href="assets/css/auth.css" />
 </head>
 
 <body class="page-villa">
 
+  <!-- MASAYU_AUTH: data autentikasi untuk script.js -->
+  <script>
+  window.MASAYU_AUTH = <?= json_encode([
+      'login'     => is_logged_in(),
+      'nama'      => is_logged_in() ? current_user_name() : '',
+      'peran'     => is_logged_in() ? current_role() : '',
+      'dashboard' => is_logged_in() ? get_role_redirect_url(current_role()) : '',
+      'csrf'      => csrf_token(),
+  ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+  </script>
+
   <!-- Header injected by script.js -->
   <div id="site-header"></div>
-
-  <!-- Bar Status Pengguna Login & Flash Messages -->
-  <?php if (is_logged_in()): ?>
-    <div class="user-status-bar">
-      <div class="container user-status-inner">
-        <div class="user-status-info">
-          <span class="user-status-greeting">Halo, <strong><?= e(current_user_name()) ?></strong></span>
-          <span class="user-role-badge badge-<?= e(current_role()) ?>"><?= strtoupper(e(current_role())) ?></span>
-        </div>
-        <div class="user-status-links">
-          <?php if (current_role() === 'pelanggan'): ?>
-            <a href="reservasi-saya.php" class="user-status-link">Reservasi Saya</a>
-            <a href="reservasi.php" class="user-status-link">Pesan Villa</a>
-          <?php elseif (current_role() === 'pengelola'): ?>
-            <a href="dashboard/pengelola.php" class="user-status-link">Dashboard Pengelola</a>
-          <?php elseif (current_role() === 'pemilik'): ?>
-            <a href="dashboard/pemilik.php" class="user-status-link">Dashboard Pemilik</a>
-          <?php elseif (current_role() === 'admin'): ?>
-            <a href="dashboard/admin.php" class="user-status-link">Dashboard Admin</a>
-          <?php endif; ?>
-          <a href="logout.php" class="user-status-logout">Keluar</a>
-        </div>
-      </div>
-    </div>
-  <?php endif; ?>
 
   <div class="container flash-container">
     <?php foreach (flash_get() as $type => $messages): ?>

@@ -393,7 +393,9 @@ function applyLanguage(lang) {
 
   // Update lang buttons
   document.querySelectorAll('.lang-btn').forEach(btn => {
-    btn.classList.toggle('is-active', btn.dataset.lang === lang);
+    const isActive = btn.dataset.lang === lang;
+    btn.classList.toggle('is-active', isActive);
+    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
   });
 
   // Re-render dynamic sections if they exist
@@ -419,11 +421,13 @@ function applyLanguage(lang) {
 
 function updateWhatsAppLinks() {
   const waUrl = `https://wa.me/${CONFIG.whatsappNumber}`;
-  // Header & Mobile Pesan button diarahkan ke reservasi.php sesuai aturan 2e
+  // Header & Mobile Pesan button diarahkan sesuai status login
+  const auth = window.MASAYU_AUTH || { login: false };
+  const pesanHref = auth.login ? 'reservasi.php' : 'login.php?lanjut=reservasi.php';
   const headerPesan = document.getElementById('headerPesanBtn');
-  if (headerPesan) headerPesan.href = 'reservasi.php';
+  if (headerPesan) headerPesan.href = pesanHref;
   const mobilePesan = document.getElementById('mobilePesanBtn');
-  if (mobilePesan) mobilePesan.href = 'reservasi.php';
+  if (mobilePesan) mobilePesan.href = pesanHref;
   // Kontak section
   const kontakWa = document.getElementById('kontakWhatsAppBtn');
   if (kontakWa) kontakWa.href = waUrl;
@@ -452,6 +456,30 @@ function injectHeader() {
 
   const isVillaPage = document.body.classList.contains('page-villa');
   const navBase = isVillaPage ? 'index.php' : '';
+  const auth = window.MASAYU_AUTH || { login: false, nama: '', peran: '', dashboard: '', csrf: '' };
+  const pesanUrl = auth.login ? 'reservasi.php' : 'login.php?lanjut=reservasi.php';
+
+  const roleLabels = {
+    admin: 'Admin',
+    pengelola: 'Pengelola',
+    pemilik: 'Pemilik',
+    pelanggan: 'Pelanggan'
+  };
+  const roleName = roleLabels[auth.peran] || 'Pengguna';
+  const initial = (auth.nama || 'A').trim().charAt(0).toUpperCase();
+
+  let targetUrl = 'reservasi-saya.php';
+  let targetLabel = 'Reservasi saya';
+  if (auth.peran === 'admin') {
+    targetUrl = 'dashboard/admin.php';
+    targetLabel = 'Dashboard Admin';
+  } else if (auth.peran === 'pengelola') {
+    targetUrl = 'dashboard/pengelola.php';
+    targetLabel = 'Dashboard Pengelola';
+  } else if (auth.peran === 'pemilik') {
+    targetUrl = 'dashboard/pemilik.php';
+    targetLabel = 'Dashboard Pemilik';
+  }
 
   const navLinks = [
     { key: 'nav.tentang', href: `${navBase}#tentang`, id: 'nav-tentang' },
@@ -464,27 +492,84 @@ function injectHeader() {
     `<li><a href="${l.href}" id="${l.id}" data-i18n="${l.key}">${t(l.key)}</a></li>`
   ).join('');
 
+  // Desktop Auth Widget
+  let desktopAuthHTML = '';
+  if (!auth.login) {
+    desktopAuthHTML = `
+      <a href="login.php" class="header-auth-link" id="headerAuthBtn">
+        <svg class="header-auth-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+        <span>Masuk</span>
+      </a>
+    `;
+  } else {
+    desktopAuthHTML = `
+      <div class="user-chip-menu" id="userChipMenu">
+        <button type="button" class="user-chip-btn" id="userChipBtn" aria-haspopup="menu" aria-expanded="false" aria-label="Menu akun pengguna">
+          <span class="user-chip-avatar">${initial}</span>
+          <span class="user-chip-name" id="headerUserName"></span>
+          <svg class="user-chip-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+        <div class="user-chip-dropdown" id="userChipDropdown" role="menu" aria-label="Pilihan akun" hidden>
+          <div class="user-dropdown-header">
+            <div class="user-dropdown-greeting">Halo, <strong id="dropdownUserName"></strong></div>
+            <span class="user-role-badge badge-${auth.peran || 'pelanggan'}">${roleName}</span>
+          </div>
+          <div class="user-dropdown-divider" role="separator"></div>
+          <a href="${targetUrl}" role="menuitem" class="user-dropdown-item" id="userMenuDashboard" tabindex="-1">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span>${targetLabel}</span>
+          </a>
+          <div class="user-dropdown-divider" role="separator"></div>
+          <form method="post" action="logout.php" class="user-dropdown-form">
+            <input type="hidden" name="csrf_token" value="${auth.csrf || ''}">
+            <button type="submit" role="menuitem" class="user-dropdown-item user-dropdown-logout" tabindex="-1">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              <span>Keluar</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    `;
+  }
+
   placeholder.innerHTML = `
     <header class="site-header ${isVillaPage ? 'is-scrolled' : 'is-transparent'}" id="siteHeader" role="banner">
       <div class="header-inner">
+        <!-- Zona Kiri: Logo -->
         <a href="index.php" class="header-logo" aria-label="Joglo Masayu">
-          <img src="assets/images/logo.png" alt="" class="header-logo-icon" width="auto" height="50" />
+          <img src="assets/images/logo.png" alt="" class="header-logo-icon" width="auto" height="44" />
           <span class="header-logo-text">Joglo Masayu</span>
         </a>
 
-        <nav aria-label="Navigasi utama">
+        <!-- Zona Tengah: Navigasi -->
+        <nav class="header-nav-wrap" aria-label="Navigasi utama">
           <ul class="header-nav" id="headerNav">
             ${navHTML}
           </ul>
         </nav>
 
-        <div class="header-right">
+        <!-- Zona Kanan: Actions -->
+        <div class="header-actions" id="headerActions">
           <div class="lang-switch" role="group" aria-label="Pilih bahasa / Select language">
-            <button class="lang-btn ${currentLang === 'id' ? 'is-active' : ''}" data-lang="id" type="button">ID</button>
-            <span class="lang-switch-divider" aria-hidden="true"></span>
-            <button class="lang-btn ${currentLang === 'en' ? 'is-active' : ''}" data-lang="en" type="button">EN</button>
+            <button class="lang-btn ${currentLang === 'id' ? 'is-active' : ''}" data-lang="id" type="button" aria-pressed="${currentLang === 'id'}">ID</button>
+            <button class="lang-btn ${currentLang === 'en' ? 'is-active' : ''}" data-lang="en" type="button" aria-pressed="${currentLang === 'en'}">EN</button>
           </div>
-          <a href="reservasi.php" id="headerPesanBtn" class="btn btn-ghost" data-i18n="nav.pesan">${t('nav.pesan')}</a>
+          ${desktopAuthHTML}
+          <a href="${pesanUrl}" id="headerPesanBtn" class="btn btn-gold header-cta-btn" data-i18n="nav.pesan">${t('nav.pesan')}</a>
           <button class="hamburger" id="hamburgerBtn" aria-expanded="false" aria-label="Buka menu navigasi" type="button">
             <span class="hamburger-line"></span>
             <span class="hamburger-line"></span>
@@ -496,14 +581,162 @@ function injectHeader() {
 
     <!-- Mobile nav overlay -->
     <nav class="mobile-nav" id="mobileNav" aria-label="Navigasi mobile" aria-hidden="true">
-      <ul class="mobile-nav-links">
-        ${navLinks.map(l =>
-    `<li><a href="${l.href}" data-i18n="${l.key}" class="mobile-nav-link">${t(l.key)}</a></li>`
-  ).join('')}
-      </ul>
-      <a href="reservasi.php" id="mobilePesanBtn" class="btn btn-ghost" data-i18n="nav.pesan">${t('nav.pesan')}</a>
+      <div class="mobile-nav-inner">
+        <div class="mobile-nav-top">
+          ${!auth.login ? `
+            <a href="login.php" class="mobile-auth-login-btn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              <span>Masuk</span>
+            </a>
+          ` : `
+            <div class="mobile-user-card">
+              <div class="mobile-user-avatar">${initial}</div>
+              <div class="mobile-user-meta">
+                <div class="mobile-user-greeting">Halo, <strong id="mobileUserName"></strong></div>
+                <span class="user-role-badge badge-${auth.peran || 'pelanggan'}">${roleName}</span>
+              </div>
+            </div>
+            <div class="mobile-user-quicklinks">
+              <a href="${targetUrl}" class="mobile-nav-link mobile-nav-dashboard-link">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                <span>${targetLabel}</span>
+              </a>
+            </div>
+          `}
+        </div>
+
+        <ul class="mobile-nav-links">
+          ${navLinks.map(l =>
+            `<li><a href="${l.href}" data-i18n="${l.key}" class="mobile-nav-link">${t(l.key)}</a></li>`
+          ).join('')}
+        </ul>
+
+        <div class="mobile-lang-wrap">
+          <span class="mobile-lang-label">Bahasa / Language</span>
+          <div class="lang-switch mobile-lang-switch" role="group" aria-label="Pilih bahasa">
+            <button class="lang-btn ${currentLang === 'id' ? 'is-active' : ''}" data-lang="id" type="button" aria-pressed="${currentLang === 'id'}">ID</button>
+            <button class="lang-btn ${currentLang === 'en' ? 'is-active' : ''}" data-lang="en" type="button" aria-pressed="${currentLang === 'en'}">EN</button>
+          </div>
+        </div>
+
+        <div class="mobile-cta-wrap">
+          <a href="${pesanUrl}" id="mobilePesanBtn" class="btn btn-gold mobile-btn-pesan" data-i18n="nav.pesan">${t('nav.pesan')}</a>
+        </div>
+
+        ${auth.login ? `
+          <div class="mobile-logout-wrap">
+            <form method="post" action="logout.php" class="mobile-logout-form">
+              <input type="hidden" name="csrf_token" value="${auth.csrf || ''}">
+              <button type="submit" class="mobile-logout-btn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span>Keluar</span>
+              </button>
+            </form>
+          </div>
+        ` : ''}
+      </div>
     </nav>
   `;
+
+  // Isi nama pengguna dengan textContent (Mencegah XSS)
+  if (auth.login && auth.nama) {
+    const desktopName = document.getElementById('headerUserName');
+    if (desktopName) desktopName.textContent = auth.nama;
+    const dropName = document.getElementById('dropdownUserName');
+    if (dropName) dropName.textContent = auth.nama;
+    const mobileName = document.getElementById('mobileUserName');
+    if (mobileName) mobileName.textContent = auth.nama;
+  }
+
+  // Inisialisasi perilaku dropdown pengguna
+  if (auth.login) {
+    initUserDropdown();
+  }
+}
+
+/* ─── User Dropdown Behavior ─────────────────────────────── */
+function initUserDropdown() {
+  const btn = document.getElementById('userChipBtn');
+  const dropdown = document.getElementById('userChipDropdown');
+  if (!btn || !dropdown) return;
+
+  function openDropdown() {
+    btn.setAttribute('aria-expanded', 'true');
+    dropdown.removeAttribute('hidden');
+    const firstItem = dropdown.querySelector('a, button');
+    if (firstItem) firstItem.focus();
+  }
+
+  function closeDropdown(focusBtn = true) {
+    btn.setAttribute('aria-expanded', 'false');
+    dropdown.setAttribute('hidden', '');
+    if (focusBtn) btn.focus();
+  }
+
+  function toggleDropdown() {
+    const isOpen = btn.getAttribute('aria-expanded') === 'true';
+    if (isOpen) {
+      closeDropdown(false);
+    } else {
+      openDropdown();
+    }
+  }
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleDropdown();
+  });
+
+  btn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleDropdown();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      openDropdown();
+    }
+  });
+
+  dropdown.addEventListener('keydown', (e) => {
+    const items = Array.from(dropdown.querySelectorAll('a, button'));
+    const currentIndex = items.indexOf(document.activeElement);
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeDropdown(true);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const nextIndex = (currentIndex + 1) % items.length;
+      items[nextIndex].focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prevIndex = (currentIndex - 1 + items.length) % items.length;
+      items[prevIndex].focus();
+    } else if (e.key === 'Tab') {
+      closeDropdown(false);
+    }
+  });
+
+  // Tutup saat klik di luar
+  document.addEventListener('click', (e) => {
+    if (!dropdown.contains(e.target) && !btn.contains(e.target)) {
+      if (btn.getAttribute('aria-expanded') === 'true') {
+        closeDropdown(false);
+      }
+    }
+  });
 }
 
 /* ─── Footer Injection ───────────────────────────────────── */

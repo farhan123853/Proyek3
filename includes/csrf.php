@@ -31,3 +31,4 @@ function csrf_verify(): void
         }
     }
 }
+

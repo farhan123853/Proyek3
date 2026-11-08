@@ -110,3 +110,4 @@ Administrator bertanggung jawab atas kelangsungan akun pengguna dan keamanan hak
    - **Proteksi Khusus**: Admin **tidak dapat menonaktifkan akunnya sendiri** untuk mencegah hilangnya akses administratif sistem.
 3. **Mengubah Peran Pengguna**:
    - Admin dapat menaikkan atau menurunkan peran pengguna (Pelanggan, Pengelola, Pemilik, Admin) sesuai wewenang penugasan.
+

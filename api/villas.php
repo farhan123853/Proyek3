@@ -101,3 +101,4 @@ try {
         'message' => 'Gagal memuat data tipe villa dari basis data.'
     ]);
 }
+

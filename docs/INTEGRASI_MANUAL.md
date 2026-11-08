@@ -50,3 +50,4 @@ Saat ini galeri dan detail villa menggunakan foto beresolusi tinggi dari Unsplas
   UPDATE `tipe_villa` SET `jumlah_unit` = 2 WHERE `slug` = 'joglo-wulung';
   ```
   Sistem secara otomatis akan mengizinkan hingga 2 reservasi berstatus *dikonfirmasi* pada rentang tanggal yang sama sebelum menyatakan kamar penuh.
+

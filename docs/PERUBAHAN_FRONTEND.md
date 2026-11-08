@@ -16,134 +16,102 @@ Dokumen ini mencatat seluruh perubahan pada file frontend statis lama sesuai atu
 
 ---
 
-## 2. Rincian Perubahan Kode Sumber
+## 2. Rincian Perubahan Kode Sumber Awal
 
 ### A. `index.php` (Sebelumnya `index.html`)
-
-1. **Baris 1–5**
-   - **Sebelum:**
-     ```html
-     <!DOCTYPE html>
-     <html lang="id" dir="ltr">
-     ```
-   - **Sesudah:**
-     ```php
-     <?php
-     require_once __DIR__ . '/includes/bootstrap.php';
-     $pageTitle = 'Joglo Masayu — Villa Joglo Premium di Jawa';
-     $pageDesc  = 'Joglo Masayu menawarkan pengalaman menginap premium di villa joglo kayu jati autentik. Rasakan ketenangan dan keindahan arsitektur Jawa yang sesungguhnya.';
-     ?>
-     <!DOCTYPE html>
-     <html lang="id" dir="ltr">
-     ```
-   - **Alasan:** Memuat modul inisialisasi aplikasi, sesi aman, dan helper PHP.
-
-2. **Bagian `<head>` (Baris 15–25)**
-   - **Sebelum:**
-     ```html
-     <link rel="icon" type="image/png" href="images/logo.png">
-     ...
-     <link rel="stylesheet" href="style.css" />
-     ```
-   - **Sesudah:**
-     ```html
-     <base href="<?= BASE_URL ?>">
-     <link rel="icon" type="image/png" href="assets/images/logo.png">
-     ...
-     <link rel="stylesheet" href="assets/css/style.css" />
-     <link rel="stylesheet" href="assets/css/app.css" />
-     ```
-   - **Alasan:** Menambahkan `<base href>` untuk mengatasi masalah path relatif pada subfolder `dashboard/` serta menyesuaikan path folder aset baru.
-
-3. **Setelah `#site-header`**
-   - **Sebelum:** Langsung ke tombol `#btnBackToTop`.
-   - **Sesudah:** Menambahkan bar status pengguna yang sedang login (`.user-status-bar`) dan container notifikasi (`.flash-container`).
-   - **Alasan:** Menyediakan informasi akun aktif dan navigasi dashboard bagi pengguna yang telah masuk (login).
-
-4. **Sebelum Bagian Galeri (Baris 180)**
-   - **Sebelum:** Tidak ada widget cuaca di beranda.
-   - **Sesudah:**
-     ```html
-     <!-- ===== PRAKIRAAN CUACA BMKG ===== -->
-     <section id="cuaca" class="section-cuaca" style="background: var(--cream); padding-block: 3.5rem;">
-       <div class="container">
-         <div id="weatherWidgetContainer"></div>
-       </div>
-     </section>
-     ```
-   - **Alasan:** Kebutuhan F-02 & F-03 untuk menampilkan prakiraan cuaca lokasi villa dari BMKG.
-
-5. **Penutup `<body>`**
-   - **Sebelum:** `<script src="script.js" defer></script>`
-   - **Sesudah:**
-     ```html
-     <script src="assets/js/script.js" defer></script>
-     <script src="assets/js/cuaca.js" defer></script>
-     ```
-   - **Alasan:** Penyesuaian path berkas `script.js` dan pemuatan skrip widget cuaca BMKG.
-
----
+1. **Bagian `<head>`**: Menambahkan `<base href="<?= BASE_URL ?>">`, link `assets/css/style.css`, `assets/css/app.css`, dan `assets/css/auth.css`. Menambahkan injeksi variabel JavaScript `window.MASAYU_AUTH` sebelum `script.js`.
+2. **Kontainer Cuaca BMKG**: Menambahkan `<section id="cuaca">` untuk merender widget BMKG Sleman.
+3. **Penutup `<body>`**: Memuat `assets/js/script.js` dan `assets/js/cuaca.js`.
 
 ### B. `villa.php` (Sebelumnya `villa.html`)
+1. **Bagian `<head>`**: Penyesuaian path aset, `<base href>`, dan `window.MASAYU_AUTH`.
+2. **Kontainer Cuaca**: Menambahkan `#weatherWidgetContainer` di dalam main.
+3. **Penutup `<body>`**: Memuat skrip aset `script.js` dan `cuaca.js`.
 
-1. **Baris 1–5 & `<head>`**
-   - **Sebelum:** Format HTML murni dengan tautan `images/logo.png` dan `style.css`.
-   - **Sesudah:** Dimulai dengan `require_once __DIR__ . '/includes/bootstrap.php';`, `<base href="<?= BASE_URL ?>">`, tautan `assets/images/logo.png`, `assets/css/style.css`, dan `assets/css/app.css`.
-   - **Alasan:** Integrasi backend PHP, base path, dan style komponen sistem.
-
-2. **Di dalam kontainer `<main>`**
-   - **Sebelum:** Hanya `#villaDetailContent`.
-   - **Sesudah:** Ditambahkan kontainer widget cuaca:
-     ```html
-     <div class="container" style="margin-top: 1.5rem; margin-bottom: 2.5rem;">
-       <div id="weatherWidgetContainer"></div>
-     </div>
-     ```
-   - **Alasan:** Kebutuhan F-02 menampilkan perkiraan cuaca di halaman detail villa.
-
-3. **Penutup `<body>`**
-   - **Sebelum:** `<script src="script.js" defer></script>`
-   - **Sesudah:**
-     ```html
-     <script src="assets/js/script.js" defer></script>
-     <script src="assets/js/cuaca.js" defer></script>
-     ```
-   - **Alasan:** Penyesuaian lokasi path aset dan pemuatan modul cuaca BMKG.
+### C. `assets/js/script.js`
+1. **Penyediaan Sumber Data Dinamis dari API (Baris ~328)**: Data master villa dimuat dinamis dari `api/villas.php` dengan fallback ke `VILLAS`.
+2. **Arah Tombol Pesan Sekarang**: Diarahkan dinamis ke `reservasi.php` (bila login) atau `login.php?lanjut=reservasi.php` (bila belum login).
+3. **Penyelarasan Tautan**: Mengubah tautan `.html` ke `.php` dan folder aset ke `assets/`.
 
 ---
 
-### C. `assets/js/script.js`
+## 3. Perbaikan Total Tata Letak Header (State Login & Responsif)
 
-1. **Penyediaan Sumber Data Dinamis dari API (Baris ~328)**
-   - **Sebelum:** Menggunakan array lokal konstan `VILLAS`.
-   - **Sesudah:** Menambahkan variabel `activeVillas = VILLAS;` dan fungsi asynchronous `loadVillasFromApi()` yang memanggil `api/villas.php`.
-   - **Alasan:** Kebutuhan F-14: data master villa dimuat dinamis dari database MySQL, dengan array `VILLAS` tetap dipertahankan utuh sebagai cadangan (fallback).
+### A. Penyebab Masalah Awal (Hasil Diagnosis)
+1. **Tabrakan Logo dengan Sapaan**: Blok `.user-status-bar` dicetak langsung oleh PHP di bawah `#site-header` dengan flow normal di `top: 0`, sehingga menumpuk tepat di atas `.header-logo` yang berposisi `fixed`.
+2. **Navigasi Melorot**: `.header-inner` menggunakan flexbox tanpa penguncian tinggi baris (`--header-h`) dan perataan vertikal terpadu.
+3. **Tombol Keluar Menimpa ID | EN**: Tautan `.user-status-links` di sisi kanan `.user-status-bar` bertumpuk langsung di atas `.lang-switch`.
+4. **Tombol Pesan Sekarang Meluap**: Ukuran padding dan line-height tombol tidak terkunci pada variabel kontrol `--control-h: 40px`, sehingga menembus batas bawah header.
+5. **Header Menyusut Terlalu Sempit**: `--header-h-scrolled: 62px` di `style.css` membuat isi meluap.
+6. **Tautan Dashboard Tidak Sejajar**: Berada di luar kontainer header utama.
 
-2. **Tombol "Pesan Sekarang" Header & Mobile (Baris ~405–410, ~471, ~488)**
-   - **Sebelum:**
-     `headerPesan.href = waUrl;` (diarahkan ke WhatsApp).
-   - **Sesudah:**
-     `headerPesan.href = 'reservasi.php';` dan `mobilePesan.href = 'reservasi.php';`.
-   - **Alasan:** Kebutuhan F-06 / aturan 2e: Tombol "Pesan Sekarang" diarahkan ke halaman formulir reservasi online internal website. Tombol WhatsApp lain tetap dipertahankan.
+### B. Tindakan Perbaikan yang Dilakukan
 
-3. **Tombol "Pesan sekarang" pada Halaman Detail Villa (Baris ~1230)**
-   - **Sebelum:**
-     `<a href="${waUrl}${waMsg}" class="btn btn-ghost" target="_blank" rel="noopener" data-i18n="villa.book">${t('villa.book')}</a>`
-   - **Sesudah:**
-     `<a href="reservasi.php?villa=${encodeURIComponent(villa.slug)}" class="btn btn-ghost" data-i18n="villa.book">${t('villa.book')}</a>`
-   - **Alasan:** Aturan 2e: diarahkan ke formulir reservasi online dengan membawa parameter villa yang dipilih. Tombol "Tanya via WhatsApp" di sampingnya (`${waUrl}${waAsk}`) tetap utuh.
+1. **Penghapusan `.user-status-bar` dari Layout**:
+   - `index.php` dan `villa.php`: Blok `.user-status-bar` dihapus total dari body.
+   - `includes/layout/head.php`: Dihapus dan digantikan oleh Chip Pengguna terpadu di dalam header.
+   - `assets/css/auth.css`: Diberikan aturan `.user-status-bar { display: none !important; }`.
 
-4. **Tautan Navigasi & Logo (Baris ~438, ~454, ~503, ~513–516)**
-   - **Sebelum:** Menunjuk ke `index.html`, `index.html#tentang`, `images/logo.png`.
-   - **Sesudah:** Menunjuk ke `index.php`, `index.php#tentang`, `assets/images/logo.png`.
-   - **Alasan:** Penyelarasan dengan ekstensi berkas PHP dan lokasi baru folder gambar.
+2. **Penerapan Grid 3-Zona pada `.header-inner`**:
+   - `display: grid !important; grid-template-columns: auto minmax(0, 1fr) auto !important; align-items: center !important; column-gap: 24px !important; height: var(--header-h) !important;`
+   - **Zona Kiri**: Hanya logo (`.header-logo`, gambar maks 44px + "Joglo Masayu").
+   - **Zona Tengah**: Navigasi (`.header-nav-wrap`, `display: flex; justify-content: center;`).
+   - **Zona Kanan**: `.header-actions` (`display: flex; align-items: center; gap: 12px;`).
+     - State Belum Login: `[ID|EN]` `[Masuk]` `[Pesan Sekarang]`
+     - State Sudah Login: `[ID|EN]` `[Chip Pengguna (Avatar + Nama)]` `[Pesan Sekarang]`
 
-5. **Tautan Detail Villa (Baris ~950, ~1147)**
-   - **Sebelum:** `villa.html?id=${villa.slug}`
-   - **Sesudah:** `villa.php?id=${villa.slug}`
-   - **Alasan:** Penyelarasan navigasi ke berkas detail villa berbasis PHP.
+3. **Standarisasi Variabel Ukuran**:
+   - Desktop: `--header-h: 72px;` (tetap stabil baik di state transparan maupun scrolled), `--control-h: 40px;`.
+   - Mobile (< 900px): `--header-h: 64px;`, `--control-h: 44px;`.
+   - Seluruh elemen kontrol di zona kanan terkunci pada `height: var(--control-h);`, menghasilkan perbedaan pusat vertikal **0.0 px** dari pusat header.
 
-6. **Inisialisasi `DOMContentLoaded` (Baris ~1340)**
-   - **Sebelum:** Langsung memanggil inisialisasi antarmuka.
-   - **Sesudah:** Menjalankan `await loadVillasFromApi()` sebelum merender daftar villa.
-   - **Alasan:** Memastikan data villa termutakhir dari basis data telah siap sebelum dirender ke DOM.
+4. **Komponen Chip Pengguna & Dropdown**:
+   - Avatar bulat 32px berisi inisial nama pengguna.
+   - Nama pengguna dengan pemotongan teks rapi (`max-width: 140px; text-overflow: ellipsis;`).
+   - Dropdown memuat: "Halo, {nama}" + badge peran, pemisah, tautan "Dashboard / Reservasi saya", pemisah, dan tombol "Keluar".
+   - Logout menggunakan formulir POST ke `logout.php` dengan token CSRF (`window.MASAYU_AUTH.csrf`).
+   - Aksesibilitas keyboard penuh: Enter/Space membuka, Esc menutup dan mengembalikan fokus, panah atas/bawah memilih item, klik luar menutup.
+   - Proteksi XSS: Pengisian nama menggunakan `textContent`, bukan `innerHTML`.
+
+5. **Responsif & Mobile Menu Overlay**:
+   - Layar 900–1199 px: Nama pada chip disembunyikan (hanya avatar), nav dirapatkan dengan `clamp()`.
+   - Layar < 900 px: Nav desktop dan zona kanan disembunyikan; tampil logo + tombol hamburger 44x44 px. Menu overlay memuat kartu pengguna/login di atas, tautan navigasi besar (>= 48px), pemilih bahasa, tombol Pesan Sekarang, dan tombol Keluar di paling bawah dengan dukungan `env(safe-area-inset-bottom)`. Menu tertutup memiliki `display: none !important;` sehingga tidak menimbulkan tumpang tindih tak terlihat.
+
+6. **Perbaikan Notifikasi Logout**:
+   - `includes/auth.php`: `logout_user()` membersihkan data autentikasi dan meregenerasi session ID tanpa menghapus cookie session flash.
+   - `logout.php`: Memverifikasi CSRF, logout, menyetel notifikasi `"Anda sudah keluar."`, dan mengarahkan ke `index.php`.
+
+---
+
+## 4. Hasil Pengujian Otomatis di Browser (Playwright)
+
+Pengujian dijalankan pada 11 ukuran viewport (1600, 1440, 1280, 1100, 1024, 900, 768, 390, 360, 320 px, dan landscape ponsel 844x390 px) melintasi 5 peran akun (Admin, Pengelola, Pemilik, Pelanggan Nama Panjang "Abdullah Averouse Ibnu Sina", dan Belum Login) serta 2 status header (Transparan & Scrolled Solid):
+
+| Kategori Pemeriksaan | Kriteria Evaluasi | Target | Hasil Pengujian | Status |
+|---|---|---|---|---|
+| **1. Tumpang Tindih Interaktif** | Tidak ada elemen `<a>` atau `<button>` yang bertabrakan bounding box-nya | 0 tabrakan | **0 tabrakan** (dari 110 pengujian) | **LULUS** |
+| **2. Batas Bawah Header** | Elemen tidak melewati batas bawah header (`rect.bottom <= header.bottom`) | 0 overflow | **0 overflow** (semua elemen muat) | **LULUS** |
+| **3. Presisi Vertikal** | Pusat vertikal elemen zona kanan berbeda <= 1.0 px dari pusat header | Selisih <= 1.0 px | **Selisih 0.0 px** | **LULUS** |
+| **4. Scroll Horizontal** | `document.documentElement.scrollWidth <= window.innerWidth` | Bebas scroll horisontal | **Lolos di seluruh lebar (termasuk 320px)** | **LULUS** |
+| **5. Ukuran Kontrol Mobile** | Area sentuh hamburger dan tombol mobile >= 44 x 44 px | Min 44x44 px | **Hamburger 44x44 px, link mobile >= 48 px** | **LULUS** |
+| **6. Ellipsis Nama Panjang** | Nama panjang ("Abdullah Averouse Ibnu Sina") tidak merusak layout | Teks terpotong elipsis | **Terpotong rapi dengan ellipsis (maks 140px)** | **LULUS** |
+| **7. Aksesibilitas Keyboard** | Buka Enter/Space, Esc menutup dan fokus kembali ke pemicu | Fungsi keyboard valid | **Enter membuka, Esc menutup & restore focus** | **LULUS** |
+| **8. Alur Logout Aman** | POST + CSRF redirect ke `index.php` dengan pesan "Anda sudah keluar." | Status notifikasi valid | **Pesan "Anda sudah keluar." tampil di beranda** | **LULUS** |
+
+**Total Pengujian**: 110 skenario kombinasi | **Lulus**: 110 | **Gagal**: 0 (100% Lulus).
+
+---
+
+## 5. Berkas Bukti Tangkapan Layar (`docs/screenshots/`)
+
+- `sebelum_desktop_1600px.png`: Kondisi sebelum perbaikan pada resolusi desktop 1600 px (terlihat tabrakan logo, KELUAR, ID|EN).
+- `sebelum_mobile_390px.png`: Kondisi sebelum perbaikan pada resolusi mobile 390 px.
+- `sesudah_desktop_1600px_admin.png`: Header presisi desktop 1600 px state transparan (Admin).
+- `sesudah_desktop_1600px_scrolled.png`: Header presisi desktop 1600 px state solid scrolled.
+- `sesudah_desktop_1280px_pelanggan_longname.png`: Tampilan pelanggan dengan nama panjang terpotong elipsis rapi.
+- `sesudah_tablet_1100px.png`: Tampilan tablet 1100 px (chip mode avatar, nav rapat).
+- `sesudah_tablet_768px.png`: Tampilan tablet 768 px mode mobile header.
+- `sesudah_mobile_390px.png`: Tampilan mobile 390 px header bersih dengan hamburger 44x44 px.
+- `sesudah_mobile_390px_menu_open.png`: Menu mobile terbuka lengkap dengan kartu profil, nav, bahasa, pesan, dan tombol keluar di dasar panel.
+- `sesudah_mobile_320px.png`: Uji perangkat layar kecil 320 px (tanpa scroll horizontal).
+- `sesudah_mobile_landscape_844x390.png`: Uji tampilan ponsel orientasi horizontal.

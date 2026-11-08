@@ -26,3 +26,4 @@ Dokumen ini memuat skenario pengujian black-box, white-box, keamanan, dan integr
 | **T-16** | Jalur logika pemeriksaan ketersediaan | Telusuri cabang algoritma saat jumlah bentrok $<$ `jumlah_unit` dan saat jumlah bentrok $\ge$ `jumlah_unit`. | Cabang logika menghitung reservasi tumpang tindih secara matematis dan menghasilkan boolean ketersediaan yang benar. | |
 | **T-17** | Pemeriksaan hak akses (Role Authorization) | Akses `dashboard/*.php` tanpa login atau menggunakan akun Pelanggan. | Permintaan tanpa hak akses ditolak dan dialihkan kembali ke `login.php` atau `index.php` disertai pesan peringatan. | |
 | **T-18** | Perhitungan estimasi nilai reservasi | Uji perhitungan durasi menginap campuran (malam weekday + malam weekend + extra bed). | Estimasi dihitung akurat dari formula durasi dikalikan tarif snapshot pemesanan, dan diberi label non-pembayaran aktual. | |
+
