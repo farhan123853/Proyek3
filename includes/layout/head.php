@@ -36,7 +36,7 @@ $bodyClass = $bodyClass ?? 'page-villa';
 
 <body class="<?= e($bodyClass) ?>">
 
-  <!-- MASAYU_AUTH: data autentikasi untuk script.js (header, dropdown, tombol Pesan) -->
+  <!-- MASAYU_AUTH & MASAYU_FLASH: data autentikasi dan notifikasi toast -->
   <script>
   window.MASAYU_LANG = <?= json_encode(get_active_lang()) ?>;
   window.MASAYU_AUTH = <?= json_encode([
@@ -46,19 +46,14 @@ $bodyClass = $bodyClass ?? 'page-villa';
       'dashboard' => is_logged_in() ? get_role_redirect_url(current_role()) : '',
       'csrf'      => csrf_token(),
   ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+  window.MASAYU_FLASH = <?= json_encode(array_reduce(array_keys($flashes = flash_get()), function ($acc, $type) use ($flashes) {
+      foreach ($flashes[$type] as $m) $acc[] = ['type' => $type, 'message' => $m];
+      return $acc;
+  }, []), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
   </script>
 
   <!-- Header injected by script.js -->
   <div id="site-header"></div>
 
-  <!-- Flash Messages Alert -->
-  <div class="container flash-container">
-    <?php foreach (flash_get() as $type => $messages): ?>
-      <?php foreach ($messages as $msg): ?>
-        <div class="alert alert-<?= e($type) ?>" role="alert">
-          <span><?= e($msg) ?></span>
-          <button type="button" class="alert-close" onclick="this.parentElement.remove()" aria-label="Tutup">&times;</button>
-        </div>
-      <?php endforeach; ?>
-    <?php endforeach; ?>
-  </div>
+  <!-- Toast Notification Region -->
+  <div id="toast-region" aria-live="polite" aria-atomic="false"></div>

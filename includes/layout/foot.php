@@ -30,6 +30,7 @@
     </div>
   </div>
 
+  <script src="assets/js/toast.js" defer></script>
   <script src="assets/js/script.js" defer></script>
   <?php if (!empty($extraScripts) && is_array($extraScripts)): ?>
     <?php foreach ($extraScripts as $scriptPath): ?>

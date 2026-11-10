@@ -10,7 +10,7 @@ require_once __DIR__ . '/includes/bootstrap.php';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     logout_user();
-    flash_set('info', 'Anda sudah keluar.');
+    flash_set('info', t('auth.logout_success'));
     redirect('index.php');
 }
 

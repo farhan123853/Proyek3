@@ -382,17 +382,19 @@ function t(key) {
   return (TRANSLATIONS[currentLang] && TRANSLATIONS[currentLang][key]) || TRANSLATIONS.id[key] || key;
 }
 
-function applyLanguage(lang) {
+function applyLanguage(lang, isExplicitUserAction = false) {
   currentLang = lang;
   setCookie('masayu_lang', lang, 365);
   setStoredLang(lang);
   document.documentElement.lang = lang;
 
-  // Cek apakah halaman memiliki banyak string PHP yang butuh reload
-  const hasClientI18n = document.querySelectorAll('[data-i18n]').length > 0;
-  if (!hasClientI18n) {
-    window.location.reload();
-    return;
+  // Jika tombol diklik oleh pengguna di halaman non-SPA PHP murni, reload agar teks PHP terjemah
+  if (isExplicitUserAction) {
+    const hasClientI18n = document.querySelectorAll('[data-i18n]').length > 0;
+    if (!hasClientI18n) {
+      window.location.reload();
+      return;
+    }
   }
 
   // Update meta title and description
