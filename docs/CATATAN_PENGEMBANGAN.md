@@ -50,4 +50,25 @@ Dokumen ini mencatat riwayat pelaksanaan tahapan pengembangan, keputusan teknis,
      - `git grep -n -i -E "cuaca|bmkg|weather|prakiraan|adm4"` terbukti bersih (hanya terdapat di dokumen penyelarasan proposal dan catatan ini).
      - Seluruh rute halaman dimuat normal (status 200) tanpa error konsol.
 
+---
+
+## Tahap 3: Perancangan & Migrasi Tabel Pembayaran
+- **Tanggal/Waktu**: 2026-11-16 (WIB)
+- **Status Gerbang**: LULUS
+- **Ringkasan Pekerjaan**:
+  1. Pembuatan Skema Tabel `pembayaran`:
+     - Berkas migrasi `database/migrations/003_pembayaran.sql` dibuat dengan atribut: `id_pembayaran`, `id_reservasi` (FK), `order_id` (UNIQUE), `sumber` (`midtrans`/`manual`), `jumlah`, `status` (`menunggu`, `lunas`, `gagal`, `kedaluwarsa`, `ganda`, `dibatalkan`), `metode_kelompok`, `metode_detail`, `transaction_id`, `snap_token`, `catatan`, `dicatat_oleh` (FK), `dibatalkan_oleh` (FK), `alasan_batal`, `dibuat_pada`, `dibayar_pada`.
+     - Skema diperbarui ke `database/schema.sql` dan didokumentasikan di `docs/STRUKTUR_DATABASE.md`.
+  2. Penegakan Aturan Satu-Lunas (One-Paid Rule):
+     - Ditegakkan langsung pada level basis data via Stored Generated Column `lunas_key INT GENERATED ALWAYS AS (IF(status='lunas', id_reservasi, NULL)) STORED` dengan indeks unik `uq_pembayaran_reservasi_lunas (lunas_key)`.
+     - Menolak duplikasi status `lunas` pada reservasi yang sama, sekaligus mengizinkan banyak percobaan berstatus non-lunas.
+     - Relasi foreign key `fk_pembayaran_reservasi` menggunakan `ON DELETE RESTRICT ON UPDATE RESTRICT` sesuai spesifikasi MySQL 8 untuk kolom yang dirujuk oleh stored generated column.
+  3. Pemetaan Helper & Seed Demo:
+     - Fungsi `kelompok_metode(?string $paymentType): string` ditambahkan ke `includes/helpers.php` sesuai dokumentasi resmi Midtrans (memetakan VA bank, e-wallet, tunai, dan fallback 'lainnya').
+     - Fungsi `status_bayar_efektif(int $idReservasi): array` ditambahkan untuk mengevaluasi status pembayaran efektif per reservasi.
+     - Berkas `database/seed-demo.sql` dibuat dengan peringatan "DATA UJI, JANGAN DIPAKAI DI PRODUKSI" berisi data contoh transaksi lintas bulan (Jan-Nov 2026) dan lintas tahun (2025).
+  4. Pengujian Gerbang:
+     - Dijalankan `tests/test_tahap3_db.php`: berhasil menyisipkan multiple order menunggu, satu lunas berhasil, percobaan lunas kedua untuk reservasi yang sama ditolak MySQL (Error 23000 Integrity constraint violation). Lulus sempurna.
+
+
 

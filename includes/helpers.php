@@ -290,3 +290,89 @@ function json_response($data, int $statusCode = 200): void
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
+
+/**
+ * Pemetaan kelompok metode pembayaran dari payment_type Midtrans atau manual
+ * Sesuai dokumentasi resmi Midtrans (Snap & Core API)
+ */
+function kelompok_metode(?string $paymentType): string
+{
+    if (empty($paymentType)) {
+        return 'lainnya';
+    }
+
+    $type = strtolower(trim($paymentType));
+
+    // 1. Transfer Bank (Virtual Account / Mandiri Bill)
+    $vaTypes = [
+        'bank_transfer',
+        'echannel',
+        'permata',
+        'permata_va',
+        'bca_va',
+        'bni_va',
+        'bri_va',
+        'cimb_va',
+        'other_va'
+    ];
+    if (in_array($type, $vaTypes, true) || (strlen($type) > 3 && substr($type, -3) === '_va')) {
+        return 'transfer_bank';
+    }
+
+    // 2. E-Wallet & QRIS
+    $ewalletTypes = [
+        'gopay',
+        'shopeepay',
+        'qris',
+        'dana',
+        'ovo',
+        'linkaja'
+    ];
+    if (in_array($type, $ewalletTypes, true)) {
+        return 'e_wallet';
+    }
+
+    // 3. Tunai / Manual Cash
+    if (in_array($type, ['cash', 'tunai', 'manual'], true)) {
+        return 'tunai';
+    }
+
+    // 4. Metode lainnya
+    error_log("Peringatan: payment_type Midtrans tidak dikenal: " . $paymentType);
+    return 'lainnya';
+}
+
+/**
+ * Mendapatkan status pembayaran efektif untuk sebuah reservasi
+ * Mengembalikan array: ['status' => ..., 'pembayaran' => ...|null]
+ */
+function status_bayar_efektif(int $idReservasi): array
+{
+    $db = get_db();
+    
+    // 1. Cek apakah ada pembayaran 'lunas'
+    $stmt = $db->prepare("SELECT * FROM pembayaran WHERE id_reservasi = ? AND status = 'lunas' LIMIT 1");
+    $stmt->execute([$idReservasi]);
+    $lunas = $stmt->fetch();
+    if ($lunas) {
+        return ['status' => 'lunas', 'pembayaran' => $lunas];
+    }
+
+    // 2. Cek apakah ada pembayaran 'menunggu'
+    $stmt = $db->prepare("SELECT * FROM pembayaran WHERE id_reservasi = ? AND status = 'menunggu' ORDER BY id_pembayaran DESC LIMIT 1");
+    $stmt->execute([$idReservasi]);
+    $menunggu = $stmt->fetch();
+    if ($menunggu) {
+        return ['status' => 'menunggu', 'pembayaran' => $menunggu];
+    }
+
+    // 3. Cek pembayaran terakhir lainnya (gagal, kedaluwarsa, dsb)
+    $stmt = $db->prepare("SELECT * FROM pembayaran WHERE id_reservasi = ? ORDER BY id_pembayaran DESC LIMIT 1");
+    $stmt->execute([$idReservasi]);
+    $terakhir = $stmt->fetch();
+    if ($terakhir) {
+        return ['status' => $terakhir['status'], 'pembayaran' => $terakhir];
+    }
+
+    return ['status' => 'belum_dibayar', 'pembayaran' => null];
+}

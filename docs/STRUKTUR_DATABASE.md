@@ -11,6 +11,9 @@ erDiagram
     PENGGUNA ||--o{ RESERVASI : "membuat (id_pelanggan)"
     PENGGUNA ||--o{ RESERVASI : "memproses (diproses_oleh)"
     TIPE_VILLA ||--o{ RESERVASI : "dipesan (id_tipe)"
+    RESERVASI ||--o{ PEMBAYARAN : "memiliki (id_reservasi)"
+    PENGGUNA ||--o{ PEMBAYARAN : "mencatat tunai (dicatat_oleh)"
+    PENGGUNA ||--o{ PEMBAYARAN : "membatalkan (dibatalkan_oleh)"
 
     PENGGUNA {
         int id_pengguna PK
@@ -52,6 +55,26 @@ erDiagram
         decimal harga_extrabed_saat_pesan
         decimal estimasi_total
         datetime dibuat_pada
+    }
+
+    PEMBAYARAN {
+        int id_pembayaran PK
+        int id_reservasi FK
+        varchar order_id UK
+        enum sumber "midtrans, manual"
+        int jumlah
+        enum status "menunggu, lunas, gagal, kedaluwarsa, ganda, dibatalkan"
+        enum metode_kelompok "transfer_bank, e_wallet, tunai, lainnya"
+        varchar metode_detail
+        varchar transaction_id
+        varchar snap_token
+        varchar catatan
+        int dicatat_oleh FK
+        int dibatalkan_oleh FK
+        varchar alasan_batal
+        datetime dibuat_pada
+        datetime dibayar_pada
+        int lunas_key UK
     }
 ```
 
@@ -116,6 +139,31 @@ Menyimpan transaksi permohonan reservasi villa oleh tamu.
 
 ---
 
+### Tabel 4: `pembayaran`
+Menyimpan riwayat percobaan transaksi pembayaran online (Midtrans Snap) dan pencatatan kas tunai oleh Pengelola.
+
+| Nama Kolom | Tipe Data | Nullable | Keterangan |
+|---|---|---|---|
+| `id_pembayaran` | `INT` | No | Primary Key, Auto Increment |
+| `id_reservasi` | `INT` | No | FK ke `reservasi.id_reservasi` (ON DELETE RESTRICT ON UPDATE RESTRICT) |
+| `order_id` | `VARCHAR(50)` | No | Pengidentifikasi unik transaksi (`MSY-...` atau `TUNAI-...`), UNIQUE |
+| `sumber` | `ENUM` | No | `'midtrans'`, `'manual'` (default: `'midtrans'`) |
+| `jumlah` | `INT` | No | Nominal pembayaran penuh (Rupiah integer, dihitung dari database server) |
+| `status` | `ENUM` | No | `'menunggu'`, `'lunas'`, `'gagal'`, `'kedaluwarsa'`, `'ganda'`, `'dibatalkan'` |
+| `metode_kelompok` | `ENUM` | Yes | Kelompok metode: `'transfer_bank'`, `'e_wallet'`, `'tunai'`, `'lainnya'` |
+| `metode_detail` | `VARCHAR(30)` | Yes | Rincian `payment_type` Midtrans (misal: `bca_va`, `gopay`, `qris`) atau `'cash'` |
+| `transaction_id` | `VARCHAR(64)` | Yes | ID transaksi unik dari sistem Midtrans |
+| `snap_token` | `VARCHAR(100)` | Yes | Token sesi pembayaran Midtrans Snap |
+| `catatan` | `VARCHAR(200)` | Yes | Catatan tambahan transaksi |
+| `dicatat_oleh` | `INT` | Yes | FK ke `pengguna.id_pengguna` (Pengelola yang mencatat tunai manual) |
+| `dibatalkan_oleh` | `INT` | Yes | FK ke `pengguna.id_pengguna` (Admin yang membatalkan catatan tunai) |
+| `alasan_batal` | `VARCHAR(200)` | Yes | Alasan pembatalan catatan tunai |
+| `dibuat_pada` | `DATETIME` | No | Waktu pembuatan order pembayaran (WIB) |
+| `dibayar_pada` | `DATETIME` | Yes | Waktu aktual penyelesaian pembayaran / settlement (WIB) |
+| `lunas_key` | `INT` (Generated) | Yes | Stored Generated: `IF(status='lunas', id_reservasi, NULL)`, UNIQUE INDEX |
+
+---
+
 ## 3. Indeks dan Integritas Relasional
 
 ### Indeks Komposit Ketersediaan (`idx_ketersediaan`)
@@ -134,6 +182,19 @@ INDEX `idx_ketersediaan` (`id_tipe`, `tanggal_checkin`, `tanggal_checkout`, `sta
 3. `fk_reservasi_pengelola`:
    `FOREIGN KEY (diproses_oleh) REFERENCES pengguna(id_pengguna) ON DELETE SET NULL ON UPDATE CASCADE`
    *(Jika akun staf dihapus/dinonaktifkan, riwayat reservasi tetap aman dengan kolom penanda menjadi NULL).*
+4. `fk_pembayaran_reservasi`:
+   `FOREIGN KEY (id_reservasi) REFERENCES reservasi(id_reservasi) ON DELETE RESTRICT ON UPDATE RESTRICT`
+   *(Integritas reservasi yang memiliki transaksi pembayaran; ON UPDATE RESTRICT wajib karena id_reservasi menjadi sumber kolom stored generated lunas_key).*
+5. `fk_pembayaran_dicatat` & `fk_pembayaran_dibatalkan`:
+   `FOREIGN KEY (dicatat_oleh/dibatalkan_oleh) REFERENCES pengguna(id_pengguna) ON DELETE SET NULL ON UPDATE CASCADE`
+
+### Aturan Satu-Lunas (One-Paid-Per-Reservation)
+Satu reservasi diperbolehkan memiliki beberapa riwayat percobaan pembayaran (misal token kedaluwarsa atau gagal lalu mencoba kembali), namun **tepat maksimal 1 pembayaran berstatus `lunas`**. Aturan ini ditegakkan pada dua lapis keamanan:
+1. **Integritas Basis Data:** Kolom Stored Generated `lunas_key INT GENERATED ALWAYS AS (IF(status='lunas', id_reservasi, NULL)) STORED` dengan `UNIQUE INDEX uq_pembayaran_reservasi_lunas (lunas_key)`. Di MySQL, indeks unik mengizinkan nilai `NULL` berulang kali, tetapi menolak duplikasi bilangan integer `id_reservasi` ketika status bernilai `lunas`.
+2. **Integritas Aplikasi (Pessimistic Locking):** Penguncian transaksi baris reservasi melalui klausa `SELECT id_reservasi FROM reservasi WHERE id_reservasi = ? FOR UPDATE` sebelum memproses notifikasi webhook atau mencatat tunai manual.
+
+### Pemisahan Status Pembayaran dan Reservasi
+Status pembayaran (`menunggu`, `lunas`, `gagal`, `kedaluwarsa`, `ganda`, `dibatalkan`) dipisahkan secara struktural dari status permohonan reservasi (`menunggu`, `dikonfirmasi`, `ditolak`). Hal ini menjaga agar algoritma ketersediaan kamar tidak terganggu sekaligus memungkinkan pelacakan audit transaksi finansial secara independen.
 
 ---
 
