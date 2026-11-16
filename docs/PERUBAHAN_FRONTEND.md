@@ -9,7 +9,7 @@ Dokumen ini mencatat seluruh perubahan pada file frontend statis lama sesuai atu
 | Berkas Asal | Berkas Tujuan | Alasan |
 |---|---|---|
 | `index.html` | `index.php` | Konversi ke PHP native untuk memuat bootstrap dan session status bar. |
-| `villa.html` | `villa.php` | Konversi ke PHP native untuk memuat bootstrap dan widget cuaca. |
+| `villa.html` | `villa.php` | Konversi ke PHP native untuk memuat bootstrap dan session status bar. |
 | `style.css` | `assets/css/style.css` | Merapikan aset stylesheet ke direktori standar `assets/css/`. Isi tidak diubah. |
 | `script.js` | `assets/js/script.js` | Merapikan aset JavaScript ke direktori standar `assets/js/`. |
 | `images/*` | `assets/images/*` | Merapikan berkas gambar (logo, favicon) ke direktori `assets/images/`. |
@@ -20,13 +20,11 @@ Dokumen ini mencatat seluruh perubahan pada file frontend statis lama sesuai atu
 
 ### A. `index.php` (Sebelumnya `index.html`)
 1. **Bagian `<head>`**: Menambahkan `<base href="<?= BASE_URL ?>">`, link `assets/css/style.css`, `assets/css/app.css`, dan `assets/css/auth.css`. Menambahkan injeksi variabel JavaScript `window.MASAYU_AUTH` sebelum `script.js`.
-2. **Kontainer Cuaca BMKG**: Menambahkan `<section id="cuaca">` untuk merender widget BMKG Sleman.
-3. **Penutup `<body>`**: Memuat `assets/js/script.js` dan `assets/js/cuaca.js`.
+2. **Penutup `<body>`**: Memuat `assets/js/script.js`.
 
 ### B. `villa.php` (Sebelumnya `villa.html`)
 1. **Bagian `<head>`**: Penyesuaian path aset, `<base href>`, dan `window.MASAYU_AUTH`.
-2. **Kontainer Cuaca**: Menambahkan `#weatherWidgetContainer` di dalam main.
-3. **Penutup `<body>`**: Memuat skrip aset `script.js` dan `cuaca.js`.
+2. **Penutup `<body>`**: Memuat skrip aset `script.js`.
 
 ### C. `assets/js/script.js`
 1. **Penyediaan Sumber Data Dinamis dari API (Baris ~328)**: Data master villa dimuat dinamis dari `api/villas.php` dengan fallback ke `VILLAS`.

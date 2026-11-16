@@ -35,7 +35,7 @@ Hasil evaluasi menunjukkan **100% Paritas Visual**: seluruh identitas visual, nu
 
 | Halaman & Skenario | 1440 px (Desktop) | 1024 px (Laptop) | 768 px (Tablet) | 390 px (Mobile) | Status Paritas | Catatan Observasi |
 |---|---|---|---|---|---|---|
-| **Beranda (`index.php`) - Guest** | Identik | Identik | Identik | Identik | **LULUS** | Hero slider, tombol CTA emas, kartu villa, dan cuaca tetap presisi. |
+| **Beranda (`index.php`) - Guest** | Identik | Identik | Identik | Identik | **LULUS** | Hero slider, tombol CTA emas, dan kartu villa tetap presisi. |
 | **Detail Villa (`villa.php`) - Guest** | Identik | Identik | Identik | Identik | **LULUS** | Galeri foto, tabel spesifikasi harga weekday/weekend rapi sejajar. |
 | **Login (`login.php`) - Form** | Identik | Identik | Identik | Identik | **LULUS** | Kartu form login terpusat, input focus ring emas aktif. |
 | **Reservasi (`reservasi.php`) - Form** | Identik | Identik | Identik | Identik | **LULUS** | Grid pilihan tanggal & kalkulator biaya responsif, tanpa overflow horizontal. |

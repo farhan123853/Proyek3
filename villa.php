@@ -72,11 +72,6 @@ $pageDesc  = 'Detail villa joglo premium di Joglo Masayu. Temukan villa yang ses
       </div>
     </div>
 
-    <!-- Widget Cuaca Lokasi Villa -->
-    <div class="container" style="margin-top: 1.5rem; margin-bottom: 2.5rem;">
-      <div id="weatherWidgetContainer"></div>
-    </div>
-
   </main>
 
   <!-- Footer injected by script.js -->
@@ -109,7 +104,6 @@ $pageDesc  = 'Detail villa joglo premium di Joglo Masayu. Temukan villa yang ses
 
   <script src="assets/js/toast.js" defer></script>
   <script src="assets/js/script.js" defer></script>
-  <script src="assets/js/cuaca.js" defer></script>
 </body>
 
 </html>

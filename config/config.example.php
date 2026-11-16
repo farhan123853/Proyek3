@@ -14,13 +14,6 @@ return [
     'DB_PASS'    => '',
     'DB_CHARSET' => 'utf8mb4',
 
-    // ── BMKG API (Prakiraan Cuaca Terbuka) ───────────────────
-    // Kode wilayah tingkat IV (Desa/Kelurahan) Sukoharjo, Ngaglik, Sleman
-    // Berdasarkan Kepmendagri 100.1.1-6117 Tahun 2022:
-    // 34 (D.I. Yogyakarta) . 04 (Kab. Sleman) . 05 (Kec. Ngaglik) . 2003 (Kalurahan Sukoharjo)
-    // TODO: Verifikasi kembali kode wilayah adm4 pada sistem BMKG bila ada pembaruan data wilayah.
-    'BMKG_ADM4'  => '34.04.05.2003',
-
     // ── Midtrans Payment Gateway (Mode Sandbox) ──────────────
     // Kunci sandbox diperoleh dari Dashboard Midtrans (Settings > Access Keys)
     // Server Key HANYA disimpan di server (jangan bocorkan ke repo atau JavaScript)

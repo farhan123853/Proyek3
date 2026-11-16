@@ -25,20 +25,20 @@ Sebelum pengembangan proyek ini:
 2. Tampilan website awal masih berupa berkas statis (`index.html`, `villa.html`), di mana data tipe villa tertulis langsung (*hardcoded*) di dalam berkas JavaScript.
 3. Pemesanan dilakukan hanya lewat percakapan WhatsApp tanpa pencatatan basis data dan tanpa verifikasi ketersediaan kamar, sehingga rawan terjadi pemesanan ganda (*double-booking*).
 4. Belum tersedia pembagian hak akses pengguna untuk membedakan tamu, pengelola, pemilik, dan administrator.
-5. Calon tamu belum dapat melihat perkiraan cuaca di sekitar lokasi penginapan.
+5. Belum tersedia integrasi sistem pembayaran digital (transfer bank/Virtual Account dan e-wallet) yang otomatis dan aman.
 
 **Solusi yang dibangun:**
-Mengembangkan sistem informasi berbasis web dengan PHP native dan MySQL untuk mengelola reservasi kamar secara online, memeriksa ketersediaan tanggal secara otomatis, membagi hak akses ke dalam 4 peran pengguna, menyajikan laporan eksekutif bagi pemilik villa, serta mengintegrasikan layanan prakiraan cuaca terbuka dari BMKG.
+Mengembangkan sistem informasi berbasis web dengan PHP native, MySQL, dan Tailwind CSS untuk mengelola reservasi kamar secara online, memeriksa ketersediaan tanggal secara otomatis, membagi hak akses ke dalam 4 peran pengguna, menyajikan laporan eksekutif bagi pemilik villa, serta mengintegrasikan payment gateway Midtrans (mode sandbox) dan pencatatan tunai manual.
 
 ---
 
 ## Tujuan Proyek
 
-1. Membangun website informasi dan promosi villa yang dinamis dengan arsitektur PHP native dan MySQL tanpa mengubah estetika visual arsitektur Joglo Masayu yang sudah ada.
+1. Membangun website informasi dan promosi villa yang dinamis dengan arsitektur PHP native, MySQL, dan Tailwind CSS tanpa mengubah estetika visual arsitektur Joglo Masayu yang sudah ada.
 2. Menyediakan fitur reservasi online bagi pelanggan dengan pemeriksaan ketersediaan jadwal menginap secara otomatis guna mencegah bentrok jadwal.
 3. Mengembangkan hak akses terpisah untuk **Pelanggan**, **Pengelola**, **Pemilik**, dan **Admin**.
-4. Menyediakan dashboard laporan performa bagi Pemilik yang menghitung estimasi nilai reservasi terkonfirmasi secara transparan.
-5. Mengintegrasikan web service BMKG untuk menampilkan prakiraan cuaca di wilayah Ngaglik, Sleman secara real-time dan andal.
+4. Menyediakan dashboard laporan performa bagi Pemilik yang menyajikan pemasukan bulanan berdasarkan tanggal pembayaran serta estimasi nilai reservasi.
+5. Mengintegrasikan Payment Gateway Midtrans Snap (Virtual Account bank dan e-wallet) serta pencatatan pembayaran tunai oleh Pengelola.
 
 ---
 
@@ -46,8 +46,8 @@ Mengembangkan sistem informasi berbasis web dengan PHP native dan MySQL untuk me
 
 | Peran | Fitur Utama |
 |---|---|
-| **Pengunjung (Publik)** | • Melihat profil, filosofi arsitektur, dan galeri villa.<br>• Melihat detail 3 tipe villa: Joglo Wulung, Joglo Saren, Joglo Agung.<br>• Melihat prakiraan cuaca BMKG dan peta lokasi Google Maps.<br>• Melakukan registrasi akun Pelanggan.<br>• Menghubungi staf melalui tautan langsung WhatsApp. |
-| **Pelanggan (Customer)** | • Mengajukan reservasi online (pilihan tipe villa, tanggal, jumlah tamu, catatan).<br>• Melihat kalkulasi estimasi tarif menginap real-time (weekday, weekend, extra bed).<br>• Memantau riwayat dan status permohonan reservasi miliknya (terproteksi IDOR). |
+| **Pengunjung (Publik)** | • Melihat profil, filosofi arsitektur, dan galeri villa.<br>• Melihat detail 3 tipe villa: Joglo Wulung, Joglo Saren, Joglo Agung.<br>• Melihat peta lokasi Google Maps.<br>• Melakukan registrasi akun Pelanggan.<br>• Menghubungi staf melalui tautan langsung WhatsApp. |
+| **Pelanggan (Customer)** | • Mengajukan reservasi online (pilihan tipe villa, tanggal, jumlah tamu, catatan).<br>• Melihat kalkulasi estimasi tarif menginap real-time (weekday, weekend, extra bed).<br>• Membayar reservasi online via Midtrans Snap (VA bank dan E-wallet).<br>• Memantau riwayat dan status permohonan reservasi miliknya (terproteksi IDOR). |
 | **Pengelola (Staff)** | • Memantau statistik reservasi masuk.<br>• Menyaring daftar reservasi berdasarkan status (menunggu, dikonfirmasi, ditolak).<br>• Memproses (konfirmasi/tolak) reservasi dengan proteksi transaksi basis data (`FOR UPDATE`).<br>• Melihat identitas pemesan dan catatan khusus tamu. |
 | **Pemilik (Owner)** | • Laporan eksekutif ringkas bersifat **Read-Only** (tanpa fitur manipulasi status).<br>• Akumulasi estimasi nilai reservasi terkonfirmasi.<br>• Keterangan wajib: *"estimasi, bukan uang masuk aktual"*, karena pembayaran fisik ditangani langsung oleh pengelola.<br>• Statistik pemesanan per tipe villa dan per periode waktu. |
 | **Administrator** | • Membuat akun staf baru (Pengelola dan Pemilik).<br>• Mengaktifkan atau menonaktifkan akun pengguna (akun nonaktif tidak dapat login).<br>• Mengubah peran akun pengguna.<br>• Proteksi keamanan: Admin dicegah menonaktifkan akunnya sendiri. |
@@ -68,7 +68,7 @@ Mengembangkan sistem informasi berbasis web dengan PHP native dan MySQL untuk me
 - **Bahasa Pemrograman:** PHP 8.x Native (tanpa framework Laravel/CodeIgniter).
 - **Basis Data:** MySQL / MariaDB (koneksi PDO dengan *prepared statements*).
 - **Antarmuka (Frontend):** HTML5 Semantik, CSS3 Murni (Variabel CSS kustom), JavaScript Vanilla ES6+.
-- **Web Service Eksternal:** API Prakiraan Cuaca Terbuka BMKG (`api.bmkg.go.id`).
+- **Payment Gateway:** Midtrans Snap PHP SDK (`midtrans/midtrans-php` mode sandbox).
 - **Peta & Tipografi:** Google Maps Tertanam (*iframe*) dan Google Fonts (*Playfair Display*, *Lato*, *Kaushan Script*).
 - **Version Control:** Git dan GitHub.
 - **Metodologi Pengembangan:** Model Waterfall (Analisis Kebutuhan $\rightarrow$ Perancangan $\rightarrow$ Implementasi $\rightarrow$ Pengujian $\rightarrow$ Dokumentasi).
@@ -79,24 +79,24 @@ Mengembangkan sistem informasi berbasis web dengan PHP native dan MySQL untuk me
 
 ```
 website/
-├── index.php                  # Beranda utama & widget cuaca BMKG
+├── index.php                  # Beranda utama
 ├── villa.php                  # Detail spesifikasi & foto tipe villa
 ├── daftar.php                 # Registrasi akun publik khusus peran Pelanggan
 ├── login.php                  # Halaman masuk untuk 4 peran pengguna
 ├── logout.php                 # Pembersihan sesi dan keluar akun
 ├── reservasi.php              # Formulir pengajuan reservasi online
 ├── reservasi-saya.php         # Riwayat reservasi pelanggan (proteksi IDOR)
-├── cuaca.php                  # Halaman informasi prakiraan cuaca BMKG
 │
 ├── dashboard/
-│   ├── pengelola.php          # Dashboard pemrosesan reservasi oleh pengelola
+│   ├── pengelola.php          # Dashboard pemrosesan reservasi & catat tunai
 │   ├── pemilik.php            # Dashboard laporan eksekutif pemilik (Read-Only)
-│   └── admin.php              # Dashboard manajemen akun staf & pengguna oleh admin
+│   └── admin.php              # Dashboard manajemen akun staf & transaksi oleh admin
 │
 ├── api/
 │   ├── villas.php             # Endpoint JSON daftar tipe villa dari database
 │   ├── cek-ketersediaan.php   # Endpoint JSON kalkulasi tarif & cek unit tumpang tindih
-│   └── cuaca.php              # Perantara cURL cuaca BMKG dengan cache 1 jam
+│   ├── buat-pembayaran.php    # Endpoint pembuatan token Midtrans Snap
+│   └── notifikasi-midtrans.php# Webhook notifikasi status pembayaran Midtrans
 │
 ├── config/
 │   ├── config.example.php     # Template konfigurasi tanpa kredensial sensitif
@@ -108,6 +108,7 @@ website/
 │   ├── auth.php               # Otentikasi, otorisasi peran, & helper login
 │   ├── csrf.php               # Token & verifikasi proteksi CSRF
 │   ├── helpers.php            # Sanitasi e(), format rupiah, tanggal ID, hitung malam
+│   ├── laporan.php           # Layanan data laporan pemasukan bulanan
 │   └── layout/
 │       ├── head.php           # Template pembuka, <base href>, style, & status bar
 │       └── foot.php           # Template penutup, modal lightbox, & skrip JS
@@ -115,18 +116,19 @@ website/
 ├── assets/
 │   ├── css/
 │   │   ├── style.css          # Stylesheet visual asli tema Joglo Masayu
-│   │   └── app.css            # Stylesheet komponen baru (form, tabel, dashboard)
+│   │   ├── app.css            # Stylesheet komponen baru (form, tabel, dashboard)
+│   │   └── tailwind.css       # Stylesheet hasil kompilasi Tailwind CSS
 │   ├── js/
 │   │   ├── script.js          # Skrip antarmuka utama (slider, nav, bahasa ID/EN)
-│   │   ├── cuaca.js           # Skrip widget cuaca BMKG (render via textContent)
+│   │   ├── toast.js           # Notifikasi toast vanilla JS
 │   │   └── reservasi.js       # Skrip kalkulasi tarif & cek ketersediaan real-time
 │   └── images/                # Aset visual: logo.png, logo-icon.png, favicon.png
 │
 ├── database/
 │   ├── schema.sql             # Perintah DDL pembuatan tabel & indeks relasional
-│   └── seed.sql               # Data awal: 3 tipe villa, akun pengujian, data contoh
+│   ├── seed.sql               # Data awal: 3 tipe villa, akun pengujian, data contoh
+│   └── migrations/            # Berkas migrasi skema database
 │
-├── cache/                     # Tempat penyimpanan cache lokal cuaca BMKG (cuaca.json)
 ├── docs/                      # Dokumentasi komprehensif sistem
 ├── .htaccess                  # Proteksi keamanan akses direktori sensitif
 ├── .gitignore                 # Daftar berkas sensitif yang diabaikan Git
@@ -178,7 +180,7 @@ website/
 Sistem diuji menggunakan 18 skenario pengujian komprehensif (T-01 sampai T-18) yang mencakup:
 - **Pengujian Fungsional Black-Box:** T-01 (informasi villa), T-02 (registrasi pelanggan), T-03 (login/logout), T-04 (reservasi valid), T-05 (validasi tanggal & kapasitas), T-06 (unit habis), T-08 (pemrosesan pengelola), T-09 (dashboard pemilik read-only), T-10 (manajemen akun admin).
 - **Pengujian Keamanan Dasar:** T-07 (pencegahan IDOR pada reservasi), T-10 (proteksi penonaktifan diri admin), T-11 (ketahanan SQL Injection dengan prepared statements), T-12 (ketahanan XSS dengan sanitasi `e()`).
-- **Pengujian Integrasi Layanan Web:** T-13 (pemanggilan sukses BMKG), T-14 (penanganan kegagalan API BMKG dengan pesan alternatif dan cache stale).
+- **Pengujian Integrasi Pembayaran:** T-31 s.d. T-54 (pengujian alur pembayaran sandbox Midtrans, webhook idempoten, dan pencatatan tunai manual).
 - **Pengujian Kompatibilitas Antarmuka:** T-15 (pengujian responsif 360px, 768px, 1024px+).
 - **Pengujian Alur Logika White-Box:** T-16 (cabang logika tumpang tindih tanggal), T-17 (jalur verifikasi otorisasi peran), T-18 (formula estimasi tarif campuran).
 
@@ -186,19 +188,10 @@ Rincian skenario pengujian lengkap tercatat pada [`docs/RENCANA_UJI.md`](docs/RE
 
 ---
 
-## Sumber Data & Atribusi Cuaca
-
-Layanan cuaca mengintegrasikan data resmi dari **Badan Meteorologi, Klimatologi, dan Geofisika (BMKG)** melalui API Terbuka Prakiraan Cuaca Wilayah Tingkat IV:
-- Dokumentasi Resmi: `https://data.bmkg.go.id/prakiraan-cuaca/`
-- Endpoint API: `https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4=34.04.05.2003`
-- Hak cipta data milik BMKG. Seluruh tampilan widget cuaca wajib dan telah mencantumkan atribusi *"Sumber: BMKG"*.
-
----
-
 ## Catatan Keamanan Dasar
 
 1. **Prepared Statements PDO:** Seluruh manipulasi dan pembacaan SQL menggunakan parameter terikat (*bound parameters*) untuk menolak upaya *SQL Injection*.
-2. **Sanitasi Output Anti-XSS:** Seluruh data dinamis yang ditampilkan ke antarmuka di-escape menggunakan fungsi `e()` (`htmlspecialchars` dengan flag `ENT_QUOTES`). Skrip JavaScript cuaca merender teks murni dengan properti `.textContent`.
+2. **Sanitasi Output Anti-XSS:** Seluruh data dinamis yang ditampilkan ke antarmuka di-escape menggunakan fungsi `e()` (`htmlspecialchars` dengan flag `ENT_QUOTES`).
 3. **Perlindungan CSRF:** Setiap formulir yang mengirimkan metode POST memuat token acak aman yang divalidasi oleh fungsi `csrf_verify()`.
 4. **Manajemen Sesi Aman:** Cookie sesi diatur dengan atribut `HttpOnly`, `SameSite=Lax`, dan regenerasi ID sesi (`session_regenerate_id(true)`) dilakukan setiap kali pengguna berhasil login.
 5. **Proteksi Akses Direktori:** Berkas `.htaccess` menolak akses langsung peramban ke direktori internal `config/`, `includes/`, `database/`, `cache/`, dan `docs/`.

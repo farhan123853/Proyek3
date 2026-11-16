@@ -1,6 +1,6 @@
 /* ============================================================
    APP.CSS — Villa Joglo Masayu
-   Komponen tambahan: Form, Tabel, Dashboard, Alert, Status Bar, Widget Cuaca
+   Komponen tambahan: Form, Tabel, Dashboard, Alert, Status Bar
    Selaras dengan style.css (--gold, --teak, --cream, --sand, --wood)
    ============================================================ */
 
@@ -409,104 +409,6 @@
   background: #047857;
   color: #FFF;
   border-color: #047857;
-}
-
-/* ─── Weather Widget Component ────────────────────────────── */
-.weather-widget {
-  background: #FFFAF0;
-  border: 1px solid var(--gold);
-  border-radius: var(--radius-img);
-  padding: 1.5rem;
-  margin-block: 2rem;
-  box-shadow: 0 4px 18px rgba(59, 36, 22, 0.05);
-}
-
-.weather-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(59, 36, 22, 0.1);
-  flex-wrap: wrap;
-}
-
-.weather-title {
-  font-family: 'Playfair Display', serif;
-  font-size: 1.25rem;
-  color: var(--teak);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.weather-source {
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--wood);
-}
-
-.weather-source strong {
-  color: var(--gold-dark);
-}
-
-.weather-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 1rem;
-}
-
-.weather-slot {
-  background: var(--cream);
-  border: 1px solid rgba(59, 36, 22, 0.12);
-  border-radius: var(--radius-btn);
-  padding: 0.85rem;
-  text-align: center;
-  transition: transform 0.2s ease;
-}
-
-.weather-slot:hover {
-  transform: translateY(-2px);
-  border-color: var(--gold);
-}
-
-.weather-slot-time {
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--wood);
-  margin-bottom: 0.35rem;
-}
-
-.weather-slot-temp {
-  font-family: 'Playfair Display', serif;
-  font-size: 1.5rem;
-  color: var(--teak);
-  line-height: 1.2;
-}
-
-.weather-slot-desc {
-  font-size: 12.5px;
-  color: var(--text);
-  margin-top: 0.25rem;
-  line-height: 1.3;
-}
-
-.weather-slot-meta {
-  font-size: 11px;
-  color: rgba(59, 36, 22, 0.65);
-  margin-top: 0.35rem;
-}
-
-.weather-fallback {
-  padding: 1.25rem;
-  background: var(--cream);
-  border-radius: var(--radius-btn);
-  color: var(--wood);
-  font-size: 14px;
-  line-height: 1.6;
 }
 
 /* ─── Estimate Highlight Box ──────────────────────────────── */

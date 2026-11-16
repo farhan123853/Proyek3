@@ -15,12 +15,10 @@ Pengunjung adalah calon tamu yang membuka website tanpa perlu masuk ke akun terl
    - Melihat spesifikasi kapasitas, fasilitas, serta galeri foto.
 2. **Melihat Detail Villa (`villa.php?id={slug}`)**:
    - Mengakses detail lengkap masing-masing villa, foto interaktif, fasilitas, rincian harga (weekday, weekend, extra bed), serta villa terkait.
-3. **Melihat Prakiraan Cuaca BMKG (`cuaca.php` / Widget Beranda)**:
-   - Memantau kondisi cuaca, suhu, kelembapan, dan kecepatan angin terkini di wilayah Sukoharjo, Ngaglik, Sleman.
-4. **Pendaftaran Akun Pelanggan (`daftar.php`)**:
+3. **Pendaftaran Akun Pelanggan (`daftar.php`)**:
    - Mendaftar dengan mengisi nama lengkap, alamat email, nomor kontak/WhatsApp, dan kata sandi minimal 6 karakter.
    - Pendaftaran publik secara otomatis menghasilkan akun dengan peran **Pelanggan**.
-5. **Menghubungi Pengelola via WhatsApp**:
+4. **Menghubungi Pengelola via WhatsApp**:
    - Tombol "Tanya via WhatsApp" dan tautan WhatsApp pada bagian kontak tetap dapat diakses kapan saja.
 
 ---

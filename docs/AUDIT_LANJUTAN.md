@@ -8,7 +8,7 @@
 
 | No | File Halaman | Peran Target / Akses | Tujuan & Deskripsi Fungsional |
 |---|---|---|---|
-| 1 | `index.php` | Publik / Guest & Autentikasi | Beranda utama: Menampilkan identitas Joglo, Hero Slider, Tipe Villa, Fasilitas Unggulan, Widget Cuaca BMKG, Galeri Foto, Peta Lokasi, dan Formulir Kontak. |
+| 1 | `index.php` | Publik / Guest & Autentikasi | Beranda utama: Menampilkan identitas Joglo, Hero Slider, Tipe Villa, Fasilitas Unggulan, Galeri Foto, Peta Lokasi, dan Formulir Kontak. |
 | 2 | `villa.php` | Publik / Guest & Autentikasi | Detail Tipe Villa: Informasi spesifikasi unit (`joglo-wulung`, `joglo-saren`, `joglo-agung`), galeri foto spesifik, kapasitas standar/maks, tarif weekday/weekend/extrabed, fasilitas lengkap, dan CTA Reservasi. |
 | 3 | `login.php` | Tamu Belum Login | Autentikasi Terpadu: Form login multi-peran (Pelanggan, Pengelola, Pemilik, Admin) menggunakan email & password, dilengkapi proteksi CSRF dan rate limiting percobaan login. |
 | 4 | `daftar.php` | Tamu Belum Login | Registrasi Akun Pelanggan: Form pembuatan akun baru khusus pelanggan (nama lengkap, email, nomor HP/WhatsApp, kata sandi). Otomatis login setelah pendaftaran berhasil. |
@@ -18,7 +18,6 @@
 | 8 | `dashboard/pengelola.php` | Pengelola (`pengelola`) | Panel Operasional Penginapan: Manajemen data reservasi harian, pembaruan status pemesanan tamu, filter periode, dan monitoring keterisian kamar. |
 | 9 | `dashboard/pemilik.php` | Pemilik (`pemilik`) | Panel Eksekutif & Finansial: Laporan metrik okupansi, total omzet/pendapatan terkonfirmasi, grafik tren bulanan, dan rekapitulasi data reservasi selesai. |
 | 10 | `dashboard/admin.php` | Administrator (`admin`) | Panel Administrasi Teknis: Manajemen master akun pengguna (Pelanggan, Pengelola, Pemilik, Admin), reset kata sandi sementara, monitoring audit trail aktivitas sistem. |
-| 11 | `cuaca.php` | Publik / Semua Pengguna | Informasi Cuaca Lengkap: Menampilkan rincian prakiraan cuaca 3 hari kawasan Villa Joglo Masayu yang bersumber dari API BMKG. |
 
 ---
 
@@ -29,7 +28,7 @@ Aplikasi menerapkan kontrol akses berbasis peran (*Role-Based Access Control* - 
 ```
 +-----------------------------------------------------------------------------------+
 | Pengguna Tamu (Guest)                                                             |
-| - Akses: index.php, villa.php, cuaca.php, login.php, daftar.php, reservasi.php    |
+| - Akses: index.php, villa.php, login.php, daftar.php, reservasi.php               |
 +-----------------------------------------------------------------------------------+
                                           | Login
 +-----------------------------------------v-----------------------------------------+
@@ -94,7 +93,6 @@ Aplikasi menerapkan kontrol akses berbasis peran (*Role-Based Access Control* - 
   - `.hero-slider`, `.hero-slide`, `.hero-content`: Banner beranda dengan slider otomatis.
   - `.card-villa`, `.villa-thumb`, `.villa-meta`: Kartu presentasi tipe villa.
   - `.lightbox`, `.lightbox-content`: Tampilan pratinjau gambar layar penuh.
-  - `.weather-card`, `.weather-temp`, `.weather-desc`: Kartu prakiraan cuaca.
 - **Animasi**:
   - `@keyframes heroZoom`: Efek Ken Burns lembut pada gambar latar slider.
   - `@keyframes fadeIn`: Kemunculan transisi halus untuk dropdown dan modal.
@@ -130,29 +128,7 @@ Aplikasi menerapkan kontrol akses berbasis peran (*Role-Based Access Control* - 
 }
 ```
 
-### B. `api/cuaca.php`
-- **Metode**: `GET`
-- **Format Respon**: `application/json`
-- **Struktur Payload**:
-```json
-{
-  "status": "success",
-  "sumber": "Badan Meteorologi, Klimatologi, dan Geofisika (BMKG)",
-  "lokasi": "Villa Joglo Masayu, Yogyakarta",
-  "terakhir_diperbarui": "2026-11-08 12:00:00",
-  "prakiraan": [
-    {
-      "waktu": "2026-11-08 12:00",
-      "cuaca": "Cerah Berawan",
-      "suhu": 31,
-      "kelembapan": 65,
-      "ikon": "cerah-berawan.svg"
-    }
-  ]
-}
-```
-
-### C. `api/cek-ketersediaan.php`
+### B. `api/cek-ketersediaan.php`
 - **Metode**: `GET` / `POST`
 - **Parameter**: `tipe_villa_id`, `check_in`, `check_out`
 - **Format Respon**: `application/json`
@@ -193,9 +169,7 @@ Aplikasi menerapkan kontrol akses berbasis peran (*Role-Based Access Control* - 
    - Diperlukan kalender interaktif visual 2 bulan (desktop) / 1 bulan (mobile) yang secara jelas memberi warna abu-abu pada malam yang penuh.
 3. **Konfirmasi Reservasi & Akses WhatsApp**:
    - Setelah membuat reservasi, tamu belum memiliki tautan cepat langsung untuk menghubungi pengelola via WhatsApp dengan pesan template yang sudah terisi otomatis (kode reservasi, nama villa, tanggal).
-4. **Konteks Prakiraan Cuaca BMKG**:
-   - Widget cuaca belum memberikan label batasan jelas bahwa data BMKG hanya mencakup prakiraan hingga 3 hari ke depan. Pemesan untuk 2 minggu ke depan belum mendapatkan deskripsi musim kualitatif (*data/musim.php*).
-5. **Reset Kata Sandi Pengguna**:
+4. **Reset Kata Sandi Pengguna**:
    - Administrator belum memiliki aksi satu-klik untuk mereset kata sandi pengguna secara acak dengan flag `wajib_ganti_sandi=1` yang memaksa pergantian sandi saat login berikutnya.
 
 ---

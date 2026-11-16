@@ -215,7 +215,7 @@ facilities (id): ['3 kamar tidur (2 king, 1 twin)', 'Pendopo besar', 'Kolam rena
 Berdasarkan fakta dan batasan frontend statis, disepakati aturan arsitektur berikut:
 
 ### A. Lokasi dan Struktur File Halaman Baru
-- **Semua halaman PHP baru berada langsung di ROOT**: `daftar.php`, `login.php`, `logout.php`, `reservasi.php`, `reservasi-saya.php`, `cuaca.php`, `dashboard-pengelola.php`, `dashboard-pemilik.php`, `dashboard-admin.php`.
+- **Semua halaman PHP baru berada langsung di ROOT**: `daftar.php`, `login.php`, `logout.php`, `reservasi.php`, `reservasi-saya.php`, `dashboard-pengelola.php`, `dashboard-pemilik.php`, `dashboard-admin.php`.
 - **Dilarang membuat subfolder `dashboard/`** untuk halaman web agar path relatif header/footer (`index.html`, `images/logo.png`) tidak rusak.
 - **Folder `api/` murni untuk endpoint JSON**: tidak memanggil header/footer HTML.
 - **Markup standar**: Menggunakan `<body class="page-villa">`, memuat `#site-header`, `#site-footer`, `style.css`, `assets/css/app.css`, dan `script.js` (defer). Tidak menggunakan atribut `data-i18n` pada halaman baru (semua teks langsung Bahasa Indonesia).

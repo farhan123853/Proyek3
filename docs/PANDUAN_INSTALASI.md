@@ -122,21 +122,11 @@ Akses URL: `http://localhost/website/index.php`
 
 ---
 
-## 5. Konfigurasi Layanan Cuaca BMKG
-
-- Sistem menggunakan API Terbuka BMKG:
-  `https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4={kode_wilayah_tingkat_iv}`
-- Kode wilayah Desa Sukoharjo, Kapanewon Ngaglik, Kabupaten Sleman adalah: `34.04.05.2003` (sesuai Kepmendagri 100.1.1-6117 Tahun 2022).
-- Sistem menyimpan respon cuaca selama 1 jam di `cache/cuaca.json` untuk menjaga batas pemanggilan API (60 permintaan/menit/IP).
-- Jika layanan BMKG mengalami gangguan atau timeout (5 detik), sistem secara otomatis menyajikan pesan alternatif informatif tanpa mengganggu fitur pemesanan villa.
-
----
-
-## 6. Pemecahan Masalah (Troubleshooting)
+## 5. Pemecahan Masalah (Troubleshooting)
 
 | Gejala Masalah | Penyebab Umum | Solusi |
 |---|---|---|
 | `Fatal error: Uncaught PDOException: could not find driver` | Ekstensi PDO MySQL dinonaktifkan pada `php.ini` | Buka `php.ini`, hapus tanda titik koma `;` di depan `extension=pdo_mysql`, simpan dan restart Apache. |
-| Layanan cuaca menampilkan pesan alternatif | Tidak ada koneksi internet atau cURL belum aktif | Pastikan ekstensi `curl` aktif pada `php.ini` dan koneksi internet stabil. |
+| Popup Snap Midtrans tidak muncul | Kunci Client Key belum diisi atau format token tidak valid | Pastikan `MIDTRANS_CLIENT_KEY` dan `MIDTRANS_SERVER_KEY` sudah terisi di `config/config.php` serta koneksi internet aktif. |
 | Navigasi halaman dashboard rusak | `APP_URL` di `config.php` belum sesuai | Sesuaikan nilai `'APP_URL'` pada `config/config.php` dengan URL yang sedang diakses di browser. |
 | Tidak bisa konfirmasi reservasi | Kapasitas unit telah terpesan pada tanggal tumpang tindih | Hal ini merupakan fitur proteksi overbooking (T-08 & T-16). Periksa tanggal lain atau tolak pemesanan yang bentrok. |

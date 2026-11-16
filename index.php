@@ -162,13 +162,6 @@ $pageDesc  = 'Joglo Masayu menawarkan pengalaman menginap premium di villa joglo
       </div>
     </section>
 
-    <!-- ===== PRAKIRAAN CUACA BMKG ===== -->
-    <section id="cuaca" class="section-cuaca" style="background: var(--cream); padding-block: 3.5rem;">
-      <div class="container">
-        <div id="weatherWidgetContainer"></div>
-      </div>
-    </section>
-
     <!-- ===== GALERI ===== -->
     <section id="galeri" class="section-galeri" aria-labelledby="galeri-heading">
       <div class="container">
@@ -316,7 +309,6 @@ $pageDesc  = 'Joglo Masayu menawarkan pengalaman menginap premium di villa joglo
 
   <script src="assets/js/toast.js" defer></script>
   <script src="assets/js/script.js" defer></script>
-  <script src="assets/js/cuaca.js" defer></script>
 </body>
 
 </html>

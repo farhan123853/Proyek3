@@ -26,3 +26,28 @@ Dokumen ini mencatat riwayat pelaksanaan tahapan pengembangan, keputusan teknis,
   - `composer install` / autoloader berfungsi normal.
   - Kelas `\Midtrans\Config` dapat dimuat dan diakses.
   - Perintah `git grep "SB-Mid-"` bersih (tidak menemukan string kunci sandbox dalam repositori yang dilacak Git).
+
+---
+
+## Tahap 2: Penghapusan Total Fitur Cuaca BMKG
+- **Tanggal/Waktu**: 2026-11-16 (WIB)
+- **Status Gerbang**: LULUS
+- **Ringkasan Pekerjaan**:
+  1. Penghapusan Berkas:
+     - Dihapus: `api/cuaca.php`, `assets/js/cuaca.js`, `cuaca.php`, `cache/cuaca.json`, dan direktori `cache/`.
+  2. Pembersihan Kode & Konfigurasi:
+     - Dihapus: konstanta `BMKG_ADM4` pada `config/config.example.php` dan `config/config.php`.
+     - Dihapus: kontainer widget cuaca dan pemanggilan `assets/js/cuaca.js` pada `index.php` dan `villa.php`.
+     - Dihapus: aturan CSS `.weather-widget` dan komponen turunannya pada `assets/css/app.css`.
+     - Dihapus: kunci translasi cuaca (`weather.*` dan `nav.cuaca`) pada `lang/id.php` dan `lang/en.php`. Skrip `tests/cek-i18n.php` terverifikasi 148 kunci lengkap tanpa error.
+  3. Pembaruan Dokumentasi & Rencana Uji:
+     - Skenario uji cuaca T-13 dan T-14 pada `docs/RENCANA_UJI.md` ditandai dibatalkan atas arahan pembimbing.
+     - `README.md`, `docs/PANDUAN_INSTALASI.md`, `docs/PANDUAN_PENGGUNAAN.md` diperbarui dengan menghapus seluruh referensi cuaca BMKG.
+     - `docs/SINKRONISASI_PROPOSAL.md` diperbarui secara komprehensif mencatat seluruh bagian naskah proposal yang harus direvisi (Bab 1.2, 1.3, 1.4, 1.5, 1.6, F-02, F-03, T-13, T-14, Tabel 2.1, Bab 2.4, Tabel 3.2, Tabel 3.6, Gambar 3.1, Bab 6, Lembar Kontribusi, Referensi [11]).
+  4. Kompilasi & Pengujian:
+     - `npm run build` dijalankan ulang (bersih tanpa class yatim).
+     - Seluruh berkas PHP lulus `php -l`.
+     - `git grep -n -i -E "cuaca|bmkg|weather|prakiraan|adm4"` terbukti bersih (hanya terdapat di dokumen penyelarasan proposal dan catatan ini).
+     - Seluruh rute halaman dimuat normal (status 200) tanpa error konsol.
+
+
