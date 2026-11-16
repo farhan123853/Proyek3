@@ -5,9 +5,14 @@ config/config.php
 # === Log ===
 *.log
 
-# === Cache ===
-cache/
+# === Dependencies ===
 node_modules/
+vendor/
+
+# === Cache & Temporary ===
+cache/
+tmp/
+foto-asli/
 
 # === OS / Editor ===
 .DS_Store

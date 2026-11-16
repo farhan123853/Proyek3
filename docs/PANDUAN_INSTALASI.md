@@ -11,6 +11,7 @@ Dokumen ini memandu langkah demi langkah pemasangan sistem aplikasi **Villa Jogl
 | **PHP** | 8.0 atau lebih baru | Wajib mengaktifkan ekstensi `pdo_mysql`, `curl`, dan `mbstring` |
 | **MySQL / MariaDB** | 5.7+ / 10.3+ | Engine InnoDB, Charset `utf8mb4` |
 | **Web Server** | Apache 2.4+ / Nginx / PHP CLI Server | Mendukung berkas `.htaccess` jika memakai Apache |
+| **Composer** | 2.0 atau lebih baru | Untuk instalasi pustaka Midtrans PHP SDK (`midtrans/midtrans-php`) |
 | **Browser Modern** | Chrome, Firefox, Edge, Safari | Mendukung JavaScript ES6+ dan Fetch API |
 
 ---
@@ -42,12 +43,19 @@ mysql -u root -p villa_joglo_masayu < database/schema.sql
 mysql -u root -p villa_joglo_masayu < database/seed.sql
 ```
 
-### Langkah 4: Siapkan Konfigurasi Lingkungan (`config.php`)
+### Langkah 4: Pasang Ketergantungan Pustaka (Composer)
+Jalankan Composer untuk memasang dependensi resmi Midtrans PHP SDK:
+```bash
+composer install --no-dev
+```
+Pastikan folder `vendor/` dan berkas `vendor/autoload.php` terbentuk secara sempurna.
+
+### Langkah 5: Siapkan Konfigurasi Lingkungan (`config.php`)
 Salin berkas `config/config.example.php` menjadi `config/config.php`:
 ```bash
 cp config/config.example.php config/config.php
 ```
-Buka `config/config.php` dengan text editor, lalu sesuaikan konfigurasi:
+Buka `config/config.php` dengan text editor, lalu sesuaikan konfigurasi basis data dan payment gateway Midtrans:
 ```php
 return [
     'DB_HOST'    => 'localhost',
@@ -57,8 +65,12 @@ return [
     'DB_PASS'    => '', // Isi password database jika ada
     'DB_CHARSET' => 'utf8mb4',
 
-    // Kode wilayah tingkat IV (Desa Sukoharjo, Ngaglik, Sleman)
-    'BMKG_ADM4'  => '34.04.05.2003',
+    // ── Midtrans Payment Gateway (Mode Sandbox) ──────────────
+    // Dapatkan kunci dari Midtrans Sandbox Dashboard (Settings > Access Keys)
+    'MIDTRANS_SERVER_KEY'    => 'YOUR_MIDTRANS_SERVER_KEY',
+    'MIDTRANS_CLIENT_KEY'    => 'YOUR_MIDTRANS_CLIENT_KEY',
+    'MIDTRANS_IS_PRODUCTION' => false,
+    'PEMBAYARAN_BATAS_JAM'   => 24,
 
     // URL aplikasi untuk base href
     'APP_URL'    => 'http://localhost/website',
@@ -66,10 +78,15 @@ return [
 ];
 ```
 
-### Langkah 5: Beri Izin Tulis untuk Folder `cache/`
-Pastikan folder `cache/` dapat ditulisi oleh web server untuk menyimpan cache prakiraan cuaca BMKG (`cache/cuaca.json`).
+### Langkah 6: Konfigurasi Akun Midtrans Sandbox
+1. Kunjungi portal Midtrans di [https://dashboard.midtrans.com](https://dashboard.midtrans.com) atau [https://simulator.sandbox.midtrans.com](https://simulator.sandbox.midtrans.com).
+2. Buat akun sandbox atau masuk ke dashboard Midtrans, lalu pastikan tombol mode berada pada **SANDBOX** (lingkungan uji coba).
+3. Buka menu **Settings > Access Keys**.
+4. Salin **Server Key** dan **Client Key**.
+5. Tempelkan kunci tersebut ke berkas `config/config.php` pada kunci `MIDTRANS_SERVER_KEY` dan `MIDTRANS_CLIENT_KEY`.
+6. Pastikan `MIDTRANS_IS_PRODUCTION` bernilai `false` selama tahap pengujian.
 
-### Langkah 6: Buka Aplikasi di Browser
+### Langkah 7: Buka Aplikasi di Browser
 Akses URL: `http://localhost/website/index.php`
 
 ---

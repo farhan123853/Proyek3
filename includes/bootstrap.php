@@ -4,6 +4,9 @@
  * Memuat konfigurasi, mengatur sesi aman, mendefinisikan konstanta, dan memuat modul inti
  */
 
+// 0. Pengaturan Zona Waktu
+date_default_timezone_set('Asia/Jakarta');
+
 // 1. Konfigurasi Sesi Aman
 if (session_status() === PHP_SESSION_NONE) {
     // Pengaturan cookie sesi aman
@@ -38,6 +41,9 @@ if (!defined('BASE_URL')) {
 }
 
 // 5. Muat Modul Inti
+if (file_exists(ROOT_PATH . 'vendor/autoload.php')) {
+    require_once ROOT_PATH . 'vendor/autoload.php';
+}
 require_once __DIR__ . '/helpers.php';
 require_once __DIR__ . '/csrf.php';
 require_once __DIR__ . '/db.php';

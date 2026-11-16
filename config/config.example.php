@@ -21,6 +21,14 @@ return [
     // TODO: Verifikasi kembali kode wilayah adm4 pada sistem BMKG bila ada pembaruan data wilayah.
     'BMKG_ADM4'  => '34.04.05.2003',
 
+    // ── Midtrans Payment Gateway (Mode Sandbox) ──────────────
+    // Kunci sandbox diperoleh dari Dashboard Midtrans (Settings > Access Keys)
+    // Server Key HANYA disimpan di server (jangan bocorkan ke repo atau JavaScript)
+    'MIDTRANS_SERVER_KEY'    => 'YOUR_MIDTRANS_SERVER_KEY',
+    'MIDTRANS_CLIENT_KEY'    => 'YOUR_MIDTRANS_CLIENT_KEY',
+    'MIDTRANS_IS_PRODUCTION' => false,
+    'PEMBAYARAN_BATAS_JAM'   => 24,
+
     // ── Aplikasi & URL ───────────────────────────────────────
     // Digunakan sebagai <base href="..."> untuk konsistensi tautan dan path aset.
     // Sesuaikan bila menggunakan subfolder di XAMPP, misal: 'http://localhost/website'
