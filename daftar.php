@@ -83,8 +83,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'peran'       => $peran
         ]);
 
-        flash_set('success', t('auth.registration_success', ['nama' => $nama]));
-        redirect('reservasi.php');
+        flash_set(
+            'success',
+            t('auth.registration_success', ['nama' => $nama])
+        );
+
+        redirect('pengaturan-akun.php');
     }
 }
 
