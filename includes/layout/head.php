@@ -8,6 +8,13 @@
 $pageTitle = $pageTitle ?? 'Villa Joglo Masayu';
 $pageDesc  = $pageDesc  ?? 'Pengalaman menginap di villa joglo kayu jati autentik bernuansa arsitektur Jawa.';
 $bodyClass = $bodyClass ?? 'page-villa';
+
+// Banner hanya tampil untuk pelanggan yang belum memverifikasi email.
+$showEmailVerificationBanner =
+    is_logged_in()
+    && current_role() === 'pelanggan'
+    && !email_verification_is_complete((int) current_user_id());
+
 ?>
 <!DOCTYPE html>
 <html lang="<?= get_active_lang() ?>" dir="ltr">
@@ -54,6 +61,33 @@ $bodyClass = $bodyClass ?? 'page-villa';
 
   <!-- Header injected by script.js -->
   <div id="site-header"></div>
+
+  <?php if ($showEmailVerificationBanner): ?>
+    <aside class="email-verification-banner" role="status">
+      <div class="email-verification-banner__inner">
+
+        <strong>
+          <?= get_active_lang() === 'en'
+              ? 'Email not verified'
+              : 'Email belum terverifikasi' ?>
+        </strong>
+
+        <span class="email-verification-banner__detail">
+          <?= get_active_lang() === 'en'
+              ? 'Verify your email to access villa reservations.'
+              : 'Verifikasi email untuk membuka akses reservasi villa.' ?>
+        </span>
+
+        <a href="pengaturan-akun.php"
+          class="email-verification-banner__action">
+          <?= get_active_lang() === 'en'
+              ? 'Verify Now'
+              : 'Verifikasi Sekarang' ?>
+        </a>
+
+      </div>
+    </aside>
+  <?php endif; ?>
 
   <!-- Toast Notification Region -->
   <div id="toast-region" aria-live="polite" aria-atomic="false"></div>
