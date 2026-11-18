@@ -151,6 +151,29 @@ Dokumen ini mencatat riwayat pelaksanaan tahapan pengembangan, keputusan teknis,
      - Uji 4: Pencatatan tunai oleh Pengelola sukses, nominal sesuai server, dan order Midtrans pending diakhiri -> HTTP 200 [LULUS].
      - Uji 5: Pembatalan catatan tunai hanya diizinkan untuk Admin, alasan wajib diisi, jejak audit tersimpan, dan reservasi kembali dapat dibayar -> HTTP 200 [LULUS].
 
+---
+
+## Tahap 7: Layanan Data Laporan Pemasukan
+- **Tanggal/Waktu**: 2026-11-18 (WIB)
+- **Status Gerbang**: LULUS
+- **Ringkasan Pekerjaan**:
+  1. Pembuatan Modul Layanan Data `includes/laporan.php`:
+     - Bersifat murni baca (read-only), tidak mengubah data di basis data.
+     - Definisi operasional Pemasukan: total pembayaran berstatus `lunas` yang dikelompokkan berdasarkan atribut `dibayar_pada` (WIB), bukan tanggal check-in. Status non-lunas (`menunggu`, `gagal`, `kedaluwarsa`, `ganda`, `dibatalkan`) tidak dihitung.
+     - Fungsi `pemasukan_bulanan(int $tahun, string $metode = 'all')`: mengembalikan data 12 bulan (bulan masa depan ditandai, bulan ini disorot) mencakup jumlah transaksi, subtotal per metode (`transfer_bank`, `e_wallet`, `tunai`, `lainnya`), dan total. Menggunakan kueri berparameter dengan rentang `>= awal tahun AND < awal tahun berikutnya` guna memanfaatkan indeks komposit `idx_pembayaran_status_dibayar (status, dibayar_pada)` tanpa mematikan indeks akibat pemanggilan fungsi pada kolom.
+     - Fungsi `pemasukan_per_tipe(int $tahun)`: menghitung distribusi pemasukan dan persentase kontribusi per tipe villa (`tipe_villa` join `reservasi` dan `pembayaran`).
+     - Fungsi `daftar_tahun_laporan()`: mengembalikan rentang tahun dari transaksi lunas tertua hingga tahun berjalan WIB.
+     - Fungsi `ringkasan_pemasukan(int $tahun, string $metode = 'all')`: menghasilkan metrik 4 kartu eksekutif (bulan ini, bulan lalu beserta perbandingannya, total tahun berjalan, dan rata-rata per bulan yang dibagi bulan berjalan).
+  2. Pengujian Otomatis Gerbang Tahap 7:
+     - Dibuat dan dieksekusi skrip pengujian `tests/laporan_test.php` dengan data fixture matematis.
+     - Uji 1: Verifikasi batas bulan WIB tepat pukul `23:59:59` (masuk Jan) dan `00:00:00` (masuk Feb) serta pengabaian seluruh transaksi non-lunas -> akurat 100% [LULUS].
+     - Uji 2: Filter metode pembayaran spesifik ('tunai') mengisolasi transaksi dengan tepat [LULUS].
+     - Uji 3: Pemisahan transaksi lintas tahun (2025 vs 2026) akurat [LULUS].
+     - Uji 4: Agregasi per tipe villa dan persentase kontribusi matematis tepat [LULUS].
+     - Uji 5: Fungsi `daftar_tahun_laporan()` mengembalikan rentang tahun valid [LULUS].
+     - Uji 6: Analisis `EXPLAIN` membuktikan kueri memakai indeks komposit `idx_pembayaran_status_dibayar` (type: range) tanpa full-table-scan [LULUS].
+
+
 
 
 
