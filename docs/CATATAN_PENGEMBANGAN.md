@@ -123,6 +123,35 @@ Dokumen ini mencatat riwayat pelaksanaan tahapan pengembangan, keputusan teknis,
      - Uji 6: Helper `sinkron_pembayaran()` berfungsi normal dan idempoten [LULUS].
      - Uji 7: Proteksi endpoint `api/cek-status-pembayaran.php` (POST only & wajib login) [LULUS].
 
+---
+
+## Tahap 6: Pembayaran Tunai Manual & Pembatalan Catatan
+- **Tanggal/Waktu**: 2026-11-18 (WIB)
+- **Status Gerbang**: LULUS
+- **Ringkasan Pekerjaan**:
+  1. Pembuatan Endpoint `api/catat-tunai.php`:
+     - Metode hanya `POST` dengan respons JSON.
+     - Dibatasi secara ketat hanya untuk peran `pengelola` (`require_role`), verifikasi CSRF.
+     - Validasi nominal otomatis dari database di server (`estimasi_total`), tanpa menerima nominal dari browser (mencegah manipulasi client-side).
+     - Validasi `tanggal_bayar`: tidak boleh di masa depan dan tidak boleh sebelum tanggal reservasi dibuat.
+     - Integrasi pengakhiran transaksi online: jika ada transaksi Midtrans 'menunggu' pada reservasi terkait, sistem otomatis membatalkan via `\Midtrans\Transaction::cancel()` dan mengubah status barisnya menjadi `kedaluwarsa`.
+     - Transaksi database aman dengan `SELECT ... FOR UPDATE` pada baris reservasi dan pengecekan ulang status `lunas` guna mencegah klik ganda (idempoten).
+     - Penyimpanan baris pembayaran: `order_id` format `TUNAI-{id_reservasi}-{timestamp}`, `sumber='manual'`, `status='lunas'`, `metode_kelompok='tunai'`, `metode_detail='cash'`, `dicatat_oleh=id_pengelola`.
+  2. Pembuatan Endpoint `api/batal-tunai.php`:
+     - Metode hanya `POST` dengan respons JSON.
+     - Dibatasi eksklusif hanya untuk peran `admin` (`require_role`), verifikasi CSRF.
+     - Wajib mengisi alasan pembatalan (`alasan_batal` maksimal 200 karakter).
+     - Mengubah status pembayaran tunai menjadi `dibatalkan`, mencatat `dibatalkan_oleh` dan `alasan_batal`. Jejak baris tetap tersimpan aman (audit trail) dan reservasi kembali berstatus belum lunas sehingga dapat dibayar ulang.
+  3. Pengujian Otomatis Gerbang Tahap 6:
+     - Dibuat dan dieksekusi skrip pengujian `tests/test_tahap6_tunai.php`.
+     - Uji 1: Pelanggan, Pemilik, Admin tidak bisa mencatat tunai -> HTTP 403 [LULUS].
+     - Uji 2A: Reservasi bukan status 'dikonfirmasi' ditolak -> HTTP 400 [LULUS].
+     - Uji 2B: Reservasi yang sudah berstatus lunas ditolak dari pencatatan ganda -> HTTP 400 [LULUS].
+     - Uji 3: Tanggal pembayaran di masa depan ditolak -> HTTP 400 [LULUS].
+     - Uji 4: Pencatatan tunai oleh Pengelola sukses, nominal sesuai server, dan order Midtrans pending diakhiri -> HTTP 200 [LULUS].
+     - Uji 5: Pembatalan catatan tunai hanya diizinkan untuk Admin, alasan wajib diisi, jejak audit tersimpan, dan reservasi kembali dapat dibayar -> HTTP 200 [LULUS].
+
+
 
 
 
