@@ -70,5 +70,31 @@ Dokumen ini mencatat riwayat pelaksanaan tahapan pengembangan, keputusan teknis,
   4. Pengujian Gerbang:
      - Dijalankan `tests/test_tahap3_db.php`: berhasil menyisipkan multiple order menunggu, satu lunas berhasil, percobaan lunas kedua untuk reservasi yang sama ditolak MySQL (Error 23000 Integrity constraint violation). Lulus sempurna.
 
+---
+
+## Tahap 4: Midtrans — Endpoint Buat Transaksi (Snap Token)
+- **Tanggal/Waktu**: 2026-11-17 (WIB)
+- **Status Gerbang**: LULUS
+- **Ringkasan Pekerjaan**:
+  1. Pembuatan Endpoint `api/buat-pembayaran.php`:
+     - Metode dibatasi hanya `POST` dengan respons JSON.
+     - Wajib terautentikasi dengan peran `pelanggan` dan verifikasi CSRF token ganda (form-data, header `X-CSRF-Token`, atau raw JSON body).
+     - Validasi ID reservasi dengan query prepared statement terikat pada `id_pelanggan` pengguna yang aktif dan `status = 'dikonfirmasi'`. Memberikan respons generik HTTP 404 jika tidak sesuai guna mencegah serangan IDOR dan enumerasi ID.
+     - Penolakan jika reservasi telah berstatus `lunas` (HTTP 400).
+     - Kebijakan efisiensi token: penggunaan kembali `snap_token` jika ada transaksi `menunggu` aktif yang belum kedaluwarsa dalam rentang waktu `PEMBAYARAN_BATAS_JAM`.
+     - Pembuatan format `order_id`: `MSY-{id_reservasi}-{timestamp}` (unik, panjang <= 50 karakter).
+     - Parameter Midtrans Snap: `transaction_details` (nominal dari `estimasi_total` di server), `item_details` (1 item nama villa maksimal 50 karakter), `customer_details` (nama, email, kontak pelanggan), `expiry` (durasi sesuai konfigurasi), dan pembatasan eksplisit `enabled_payments` hanya untuk Virtual Account bank (`bca_va`, `echannel`, `bni_va`, `bri_va`, `permata_va`, `cimb_va`, `other_va`) dan e-wallet (`gopay`, `shopeepay`, `qris`). Kartu kredit tidak ditawarkan.
+     - Penanganan exception `\Midtrans\Snap::getSnapToken()` yang aman dengan penyaringan error log (mencegah kebocoran Server Key), pesan generik dwibahasa, dan HTTP 502 bila gagal menghubungi API Midtrans.
+     - Penyimpanan baris pembayaran awal ke tabel `pembayaran` dengan `sumber='midtrans'`, `status='menunggu'`, dan `snap_token`.
+  2. Pengujian Otomatis Gerbang Tahap 4:
+     - Dibuat dan dijalankan skrip pengujian HTTP end-to-end `tests/test_tahap4_http.php`.
+     - Test 1: Permintaan tanpa login -> ditolak (HTTP 403) [LULUS].
+     - Test 2: Permintaan dengan token CSRF tidak valid -> ditolak (HTTP 403) [LULUS].
+     - Test 3: Upaya IDOR mengakses reservasi pelanggan lain -> ditolak (HTTP 404) [LULUS].
+     - Test 4: Upaya pembayaran reservasi berstatus `menunggu` (belum disetujui pengelola) -> ditolak (HTTP 404) [LULUS].
+     - Test 5: Upaya pembayaran pada reservasi yang sudah lunas -> ditolak (HTTP 400) [LULUS].
+     - Test 6: Verifikasi parameter Snap terbukti hanya mencantumkan kode VA bank & E-wallet resmi serta tanpa `credit_card` [LULUS].
+
+
 
 

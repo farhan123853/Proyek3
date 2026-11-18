@@ -20,12 +20,23 @@ function csrf_field(): string
     return '<input type="hidden" name="csrf_token" value="' . e(csrf_token()) . '">';
 }
 
+function csrf_token_valid(?string $token): bool
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    $sessionToken = $_SESSION['csrf_token'] ?? '';
+    if (empty($token) || empty($sessionToken)) {
+        return false;
+    }
+    return hash_equals($sessionToken, $token);
+}
+
 function csrf_verify(): void
 {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $token = $_POST['csrf_token'] ?? '';
-        $sessionToken = $_SESSION['csrf_token'] ?? '';
-        if (empty($token) || empty($sessionToken) || !hash_equals($sessionToken, $token)) {
+        $token = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+        if (!csrf_token_valid($token)) {
             http_response_code(403);
             die('Error 403: Permintaan tidak sah (CSRF token tidak valid atau sesi berakhir). Silakan muat ulang halaman.');
         }

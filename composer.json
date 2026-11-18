@@ -1,5 +1,10 @@
 {
+    "name": "villa-joglo-masayu/website",
+    "description": "Website Resmi dan Sistem Reservasi Villa Joglo Masayu",
+    "type": "project",
+    "license": "proprietary",
     "require": {
+        "php": ">=8.0",
         "midtrans/midtrans-php": "^2.6"
     }
 }

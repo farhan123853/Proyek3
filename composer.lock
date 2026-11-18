@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "09895849f12de276db226c9272500f53",
+    "content-hash": "2062e3fb932cdcc422f0e87d70f8ed8b",
     "packages": [
         {
             "name": "midtrans/midtrans-php",
@@ -74,7 +74,9 @@
     "stability-flags": {},
     "prefer-stable": false,
     "prefer-lowest": false,
-    "platform": {},
+    "platform": {
+        "php": ">=8.0"
+    },
     "platform-dev": {},
     "plugin-api-version": "2.6.0"
 }

@@ -32,6 +32,20 @@ function current_role(): ?string
     return $_SESSION['user_role'] ?? null;
 }
 
+function current_user(): ?array
+{
+    if (!is_logged_in()) {
+        return null;
+    }
+    return [
+        'id_pengguna' => $_SESSION['user_id'] ?? null,
+        'nama'        => $_SESSION['user_name'] ?? '',
+        'email'       => $_SESSION['user_email'] ?? '',
+        'kontak'      => $_SESSION['user_kontak'] ?? '',
+        'peran'       => $_SESSION['user_role'] ?? null,
+    ];
+}
+
 function login_user(array $pengguna): void
 {
     if (session_status() === PHP_SESSION_NONE) {
