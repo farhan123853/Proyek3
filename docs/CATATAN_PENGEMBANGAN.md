@@ -194,24 +194,49 @@ Dokumen ini mencatat riwayat pelaksanaan tahapan pengembangan, keputusan teknis,
      - `git grep "SB-Mid-"`: Bersih dari bocoran API keys.
      - PHP Lint: Seluruh berkas PHP lulus sintaks tanpa galat.
 
+---
+
+## Tahap 8 (Bagian 2): Dashboard Pemilik dan Admin (Dwibahasa, Responsif)
 - **Tanggal/Waktu**: 2026-11-18 (WIB)
 - **Status Gerbang**: LULUS
 - **Ringkasan Pekerjaan**:
-  1. Pembuatan Modul Layanan Data `includes/laporan.php`:
-     - Bersifat murni baca (read-only), tidak mengubah data di basis data.
-     - Definisi operasional Pemasukan: total pembayaran berstatus `lunas` yang dikelompokkan berdasarkan atribut `dibayar_pada` (WIB), bukan tanggal check-in. Status non-lunas (`menunggu`, `gagal`, `kedaluwarsa`, `ganda`, `dibatalkan`) tidak dihitung.
-     - Fungsi `pemasukan_bulanan(int $tahun, string $metode = 'all')`: mengembalikan data 12 bulan (bulan masa depan ditandai, bulan ini disorot) mencakup jumlah transaksi, subtotal per metode (`transfer_bank`, `e_wallet`, `tunai`, `lainnya`), dan total. Menggunakan kueri berparameter dengan rentang `>= awal tahun AND < awal tahun berikutnya` guna memanfaatkan indeks komposit `idx_pembayaran_status_dibayar (status, dibayar_pada)` tanpa mematikan indeks akibat pemanggilan fungsi pada kolom.
-     - Fungsi `pemasukan_per_tipe(int $tahun)`: menghitung distribusi pemasukan dan persentase kontribusi per tipe villa (`tipe_villa` join `reservasi` dan `pembayaran`).
-     - Fungsi `daftar_tahun_laporan()`: mengembalikan rentang tahun dari transaksi lunas tertua hingga tahun berjalan WIB.
-     - Fungsi `ringkasan_pemasukan(int $tahun, string $metode = 'all')`: menghasilkan metrik 4 kartu eksekutif (bulan ini, bulan lalu beserta perbandingannya, total tahun berjalan, dan rata-rata per bulan yang dibagi bulan berjalan).
-  2. Pengujian Otomatis Gerbang Tahap 7:
-     - Dibuat dan dieksekusi skrip pengujian `tests/laporan_test.php` dengan data fixture matematis.
-     - Uji 1: Verifikasi batas bulan WIB tepat pukul `23:59:59` (masuk Jan) dan `00:00:00` (masuk Feb) serta pengabaian seluruh transaksi non-lunas -> akurat 100% [LULUS].
-     - Uji 2: Filter metode pembayaran spesifik ('tunai') mengisolasi transaksi dengan tepat [LULUS].
-     - Uji 3: Pemisahan transaksi lintas tahun (2025 vs 2026) akurat [LULUS].
-     - Uji 4: Agregasi per tipe villa dan persentase kontribusi matematis tepat [LULUS].
-     - Uji 5: Fungsi `daftar_tahun_laporan()` mengembalikan rentang tahun valid [LULUS].
-     - Uji 6: Analisis `EXPLAIN` membuktikan kueri memakai indeks komposit `idx_pembayaran_status_dibayar` (type: range) tanpa full-table-scan [LULUS].
+  1. Dashboard Pemilik (`dashboard/pemilik.php`):
+     - Murni BACA (Read-Only), tanpa satu pun tombol atau formulir pengubah status (tidak ada form metode POST).
+     - Pemasukan dihitung berdasarkan tanggal pembayaran aktual (`dibayar_pada`), bukan tanggal check-in.
+     - Banner status lingkungan dwibahasa (Sandbox / Live) sesuai konstanta `MIDTRANS_IS_PRODUCTION`.
+     - Filter interaktif chip metode (`Semua`, `Transfer bank`, `E-wallet`, `Tunai`) dan pemilih tahun (`daftar_tahun_laporan`) yang memperbarui kartu, grafik, dan tabel secara asinkronus via fetch JSON `api/laporan-pemilik.php` tanpa reload penuh halaman, dengan fallback server-side rendering.
+     - 4 Kartu ringkasan: Bulan ini (sampai tanggal berjalan), Bulan lalu (beserta persentase pertumbuhan), Total tahun terpilih, dan Rata-rata per bulan (dibagi bulan yang sudah berjalan).
+     - Grafik batang bertumpuk 12 bulan (HTML/SVG vanilla) dengan palet metode jelas, legenda, nilai dalam juta Rupiah di atas tiap batang, penanda khusus bulan berjalan, dan aksesibilitas lengkap (`role="img"`, `aria-label`).
+     - Tabel rincian per bulan (desktop) yang bertransformasi menjadi kartu bertumpuk di mobile (<640px) tanpa scroll horizontal.
+     - Kartu kontribusi persentase pemasukan per tipe villa untuk tahun terpilih.
+     - Kartu terpisah "Estimasi Nilai Reservasi Terkonfirmasi" dengan catatan kepatuhan wajib "Estimasi, belum tentu sudah dibayar" (tidak digabungkan dengan angka uang masuk aktual).
+  2. Endpoint Layanan API Pemilik (`api/laporan-pemilik.php`):
+     - Hanya menerima GET dengan proteksi peran Pemilik dan Admin.
+     - Mengembalikan data teragregasi secara efisien untuk pembaruan DOM dinamis.
+  3. Dashboard Admin (`dashboard/admin.php`):
+     - Mempertahankan seluruh fungsi manajemen staf yang sudah ada (tambah staf, aktif/nonaktifkan akun, ubah peran) pada Tab "Manajemen Akun Staf".
+     - Menambahkan Tab "Transaksi Pembayaran":
+       - Menampilkan seluruh pembayaran: Order ID, Reservasi, Nominal, Sumber (`midtrans`/`manual`), Metode, Status (`render_badge_pembayaran`), Waktu, dan Petugas pencatat.
+       - Penyaring ganda status pembayaran (termasuk status `ganda` dan `dibatalkan`) dan sumber transaksi, serta kotak pencarian teks (Order ID atau #RSV) dan paginasi terstruktur.
+       - Penanda khusus "Perlu Ditinjau" untuk pembayaran ganda.
+       - Tombol "Sinkronkan status" per transaksi Midtrans via AJAX POST dan CSRF.
+       - Tombol "Batalkan catatan tunai" khusus pembayaran tunai lunas dengan modal dialog, input alasan wajib (maks. 200 karakter), dan integrasi ke `api/batal-tunai.php`.
+     - Badge Mode (Sandbox / Production) di header dan peringatan jika Server Key belum dikonfigurasi.
+     - Proteksi keamanan: Server Key dan data kartu kredit tidak pernah ditampilkan di antarmuka.
+  4. Pengujian Otomatis Gerbang Tahap 8 (Bagian 2):
+     - Dibuat dan dieksekusi skrip pengujian `tests/test_tahap8_pemilik_admin.php`.
+     - Uji 1: Dashboard Pemilik terbukti Read-Only dan memuat seluruh elemen visual laporan [LULUS].
+     - Uji 2: API `api/laporan-pemilik.php` valid dan pemasukan bulan ini terbukti bertambah secara akurat setelah pembayaran lunas [LULUS].
+     - Uji 3: Filter metode pembayaran memilah data secara konsisten [LULUS].
+     - Uji 4: Dashboard Admin memuat tab transaksi, badge mode, dialog pembatalan tunai, dan proteksi akun [LULUS].
+     - Uji 5: Pengujian dwibahasa ID/EN pada halaman Pemilik dan Admin [LULUS].
+     - Uji 6: Pemindaian bebas `alert()` browser [LULUS].
+  5. Verifikasi Tambahan:
+     - `php tests/cek-i18n.php`: 254 kunci simetris di ID dan EN, 0 missing keys.
+     - Rebuild Tailwind CSS: `npm run build` sukses.
+     - PHP Lint: Seluruh berkas PHP lulus sintaks tanpa galat.
+     - `git grep "SB-Mid-"`: Bersih dari bocoran API keys.
+
 
 
 
