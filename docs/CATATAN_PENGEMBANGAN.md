@@ -95,6 +95,35 @@ Dokumen ini mencatat riwayat pelaksanaan tahapan pengembangan, keputusan teknis,
      - Test 5: Upaya pembayaran pada reservasi yang sudah lunas -> ditolak (HTTP 400) [LULUS].
      - Test 6: Verifikasi parameter Snap terbukti hanya mencantumkan kode VA bank & E-wallet resmi serta tanpa `credit_card` [LULUS].
 
+---
+
+## Tahap 5: Webhook Notifikasi Midtrans dan Sinkronisasi Status
+- **Tanggal/Waktu**: 2026-11-18 (WIB)
+- **Status Gerbang**: LULUS
+- **Ringkasan Pekerjaan**:
+  1. Pembuatan Webhook `notifikasi-midtrans.php` (dan alias `api/notifikasi-midtrans.php`):
+     - Menerima notifikasi resmi server-to-server dari Midtrans tanpa login dan tanpa CSRF.
+     - Verifikasi `signature_key`: `hash('sha512', order_id . status_code . gross_amount . SERVER_KEY)` dibandingkan dengan `hash_equals()`. Nilai `gross_amount` digunakan tepat sebagai string dari body tanpa konversi tipe data. Permintaan dengan tanda tangan tidak valid ditolak dengan HTTP 403.
+     - Konfirmasi status resmi ke Midtrans melalui `\Midtrans\Transaction::status(order_id)` dengan fallback aman ke body terverifikasi jika diuji dalam sandbox/mock lokal.
+     - Pemetaan status Midtrans: `settlement` atau `capture` (fraud `accept`) -> `lunas`; `pending` -> `menunggu`; `expire` -> `kedaluwarsa`; `deny`/`cancel`/`failure` -> `gagal`; status tak dikenal -> `menunggu` + log peringatan.
+     - Validasi keberadaan `order_id` di database dan kesesuaian nilai nominal terhadap kolom `jumlah` (HTTP 400 jika tidak cocok).
+     - Pembaruan idempoten dalam transaksi database (`SELECT ... FOR UPDATE` pada reservasi dan pembayaran): webhook duplikat tidak memicu galat dan tidak menurunkan status yang sudah `lunas`.
+     - Penanganan Kasus Pembayaran Ganda: jika notifikasi settlement tiba untuk order Midtrans ketika reservasi sudah lunas melalui pembayaran lain (misalnya pembayaran tunai telah dicatat), status baris Midtrans ditetapkan menjadi `ganda`, diberi catatan rujukan, dicatat di error log, dan tidak dihitung ke pemasukan sistem.
+     - Mengembalikan respons HTTP 200 hanya saat pemrosesan sukses.
+  2. Implementasi Helper Sinkronisasi & API Cek Status:
+     - Dibuat fungsi helper `sinkron_pembayaran(string $orderId): array` di `includes/helpers.php` sebagai mekanisme Plan B jika webhook tidak tembus.
+     - Dibuat endpoint `api/cek-status-pembayaran.php` (metode POST + verifikasi CSRF): peran Pelanggan hanya diizinkan memeriksa transaksinya sendiri (proteksi IDOR), sementara Pengelola dan Admin dapat memeriksa transaksi manapun.
+  3. Pengujian Otomatis Gerbang Tahap 5:
+     - Dibuat dan dieksekusi skrip pengujian `tests/test_tahap5_webhook.php`.
+     - Uji 1: Signature palsu/salah -> ditolak (HTTP 403) [LULUS].
+     - Uji 2: Order ID tidak dikenal -> ditolak (HTTP 400) [LULUS].
+     - Uji 3: Nominal tidak cocok antara webhook dan database -> ditolak (HTTP 400) [LULUS].
+     - Uji 4: Webhook dikirim dua kali berturut-turut (idempoten) -> HTTP 200, tetap 1 lunas [LULUS].
+     - Uji 5: Settlement terlambat setelah pembayaran tunai tercatat -> status `ganda`, tidak dihitung lunas [LULUS].
+     - Uji 6: Helper `sinkron_pembayaran()` berfungsi normal dan idempoten [LULUS].
+     - Uji 7: Proteksi endpoint `api/cek-status-pembayaran.php` (POST only & wajib login) [LULUS].
+
+
 
 
 

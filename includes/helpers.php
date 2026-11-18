@@ -376,3 +376,202 @@ function status_bayar_efektif(int $idReservasi): array
 
     return ['status' => 'belum_dibayar', 'pembayaran' => null];
 }
+
+/**
+ * Pemetaan status transaksi Midtrans ke status internal sistem
+ */
+function petakan_status_midtrans(string $transactionStatus, ?string $fraudStatus = null): string
+{
+    $txStatus = strtolower(trim($transactionStatus));
+    $fraud = strtolower(trim((string)$fraudStatus));
+
+    if ($txStatus === 'settlement' || ($txStatus === 'capture' && $fraud === 'accept')) {
+        return 'lunas';
+    }
+    if ($txStatus === 'pending') {
+        return 'menunggu';
+    }
+    if ($txStatus === 'expire') {
+        return 'kedaluwarsa';
+    }
+    if (in_array($txStatus, ['deny', 'cancel', 'failure', 'failed'], true)) {
+        return 'gagal';
+    }
+
+    error_log("Status Midtrans tidak dikenal: " . $transactionStatus);
+    return 'menunggu';
+}
+
+/**
+ * Proses pembaruan status pembayaran dari payload/objek Midtrans secara idempoten dan aman
+ */
+function proses_status_transaksi_midtrans(string $orderId, array $statusData): array
+{
+    global $config;
+    $db = get_db();
+
+    $transactionStatus = $statusData['transaction_status'] ?? '';
+    $fraudStatus = $statusData['fraud_status'] ?? null;
+    $paymentType = $statusData['payment_type'] ?? '';
+    $transactionId = $statusData['transaction_id'] ?? null;
+    $settlementTime = $statusData['settlement_time'] ?? null;
+    $grossAmount = $statusData['gross_amount'] ?? null;
+
+    $statusInternal = petakan_status_midtrans($transactionStatus, $fraudStatus);
+
+    $db->beginTransaction();
+    try {
+        // 1. Kunci dan validasi baris pembayaran
+        $stmtP = $db->prepare("SELECT id_pembayaran, id_reservasi, order_id, sumber, jumlah, status FROM pembayaran WHERE order_id = ? FOR UPDATE");
+        $stmtP->execute([$orderId]);
+        $currP = $stmtP->fetch();
+
+        if (!$currP) {
+            $db->rollBack();
+            return ['ok' => false, 'pesan' => 'Order ID tidak ditemukan di basis data', 'http_code' => 400];
+        }
+
+        // 2. Validasi kesesuaian gross_amount jika tersedia
+        if ($grossAmount !== null && $grossAmount !== '') {
+            $nominalExpected = (int)$currP['jumlah'];
+            $nominalReceived = (int)round((float)$grossAmount);
+            if ($nominalExpected !== $nominalReceived) {
+                $db->rollBack();
+                error_log("Validasi nominal gagal pada {$orderId}: diharapkan {$nominalExpected}, diterima {$nominalReceived}");
+                return ['ok' => false, 'pesan' => 'Nominal transaksi tidak cocok dengan database', 'http_code' => 400];
+            }
+        }
+
+        // 3. Kunci baris reservasi terkait
+        $stmtR = $db->prepare("SELECT id_reservasi, status FROM reservasi WHERE id_reservasi = ? FOR UPDATE");
+        $stmtR->execute([$currP['id_reservasi']]);
+        $reservasi = $stmtR->fetch();
+
+        // 4. Idempotensi: jika baris pembayaran ini SUDAH 'lunas', jangan turunkan statusnya
+        if ($currP['status'] === 'lunas') {
+            $db->commit();
+            return ['ok' => true, 'status' => 'lunas', 'pesan' => 'Pembayaran sudah lunas (idempoten)', 'http_code' => 200];
+        }
+
+        // 5. Kasus status baru adalah 'lunas'
+        if ($statusInternal === 'lunas') {
+            // Cek apakah ada pembayaran 'lunas' LAIN pada reservasi yang sama (misal tunai yang dicatat Pengelola)
+            $stmtLunasLain = $db->prepare("
+                SELECT id_pembayaran, order_id, sumber, metode_kelompok, jumlah 
+                FROM pembayaran 
+                WHERE id_reservasi = ? AND status = 'lunas' AND id_pembayaran != ?
+                LIMIT 1
+            ");
+            $stmtLunasLain->execute([$currP['id_reservasi'], $currP['id_pembayaran']]);
+            $lunasLain = $stmtLunasLain->fetch();
+
+            $metodeKelompok = kelompok_metode($paymentType);
+            $dibayarPada = $settlementTime ? date('Y-m-d H:i:s', strtotime($settlementTime)) : date('Y-m-d H:i:s');
+
+            if ($lunasLain) {
+                // KASUS PEMBAYARAN GANDA:
+                // Ditandai 'ganda' agar tidak dihitung dua kali sebagai pemasukan & tampil 'perlu ditinjau' di admin
+                $catatanGanda = "Pembayaran ganda: reservasi sudah lunas via " . $lunasLain['sumber'] . " (" . $lunasLain['order_id'] . "). Perlu ditinjau.";
+                $stmtUpdate = $db->prepare("
+                    UPDATE pembayaran 
+                    SET status = 'ganda',
+                        metode_kelompok = ?,
+                        metode_detail = ?,
+                        transaction_id = ?,
+                        catatan = ?,
+                        dibayar_pada = ?
+                    WHERE id_pembayaran = ?
+                ");
+                $stmtUpdate->execute([$metodeKelompok, $paymentType, $transactionId, $catatanGanda, $dibayarPada, $currP['id_pembayaran']]);
+                error_log("PERINGATAN PEMBAYARAN GANDA: order_id {$orderId} tiba saat reservasi {$currP['id_reservasi']} sudah lunas.");
+                $db->commit();
+                return ['ok' => true, 'status' => 'ganda', 'pesan' => 'Pembayaran ganda terdeteksi (perlu ditinjau)', 'http_code' => 200];
+            } else {
+                // Pembayaran lunas pertama yang sah
+                $stmtUpdate = $db->prepare("
+                    UPDATE pembayaran 
+                    SET status = 'lunas',
+                        metode_kelompok = ?,
+                        metode_detail = ?,
+                        transaction_id = ?,
+                        dibayar_pada = ?
+                    WHERE id_pembayaran = ?
+                ");
+                $stmtUpdate->execute([$metodeKelompok, $paymentType, $transactionId, $dibayarPada, $currP['id_pembayaran']]);
+                $db->commit();
+                return ['ok' => true, 'status' => 'lunas', 'pesan' => 'Pembayaran berhasil dikonfirmasi lunas', 'http_code' => 200];
+            }
+        } else {
+            // Status non-lunas ('menunggu', 'kedaluwarsa', 'gagal')
+            // Jangan mengubah status jika sudah 'lunas' atau 'ganda'
+            if (!in_array($currP['status'], ['lunas', 'ganda'], true)) {
+                $metodeKelompok = !empty($paymentType) ? kelompok_metode($paymentType) : null;
+                $stmtUpdate = $db->prepare("
+                    UPDATE pembayaran 
+                    SET status = ?,
+                        metode_kelompok = COALESCE(?, metode_kelompok),
+                        metode_detail = COALESCE(?, metode_detail),
+                        transaction_id = COALESCE(?, transaction_id)
+                    WHERE id_pembayaran = ?
+                ");
+                $stmtUpdate->execute([$statusInternal, $metodeKelompok, $paymentType, $transactionId, $currP['id_pembayaran']]);
+            }
+            $db->commit();
+            return ['ok' => true, 'status' => $statusInternal, 'pesan' => 'Status pembayaran: ' . $statusInternal, 'http_code' => 200];
+        }
+    } catch (\Exception $e) {
+        $db->rollBack();
+        error_log("Kesalahan basis data saat update status pembayaran {$orderId}: " . $e->getMessage());
+        return ['ok' => false, 'pesan' => 'Terjadi kesalahan basis data internal', 'http_code' => 500];
+    }
+}
+
+/**
+ * Helper Sinkron Pembayaran (Plan B jika webhook belum/tidak tembus)
+ * Memanggil Midtrans \Midtrans\Transaction::status() lalu menerapkan pemetaan & validasi
+ */
+function sinkron_pembayaran(string $orderId): array
+{
+    global $config;
+    $db = get_db();
+
+    // 1. Cek keberadaan order di DB
+    $stmt = $db->prepare("SELECT id_pembayaran, status, sumber, jumlah FROM pembayaran WHERE order_id = ? LIMIT 1");
+    $stmt->execute([$orderId]);
+    $pembayaran = $stmt->fetch();
+    if (!$pembayaran) {
+        return ['ok' => false, 'pesan' => 'Order ID tidak ditemukan', 'http_code' => 404];
+    }
+
+    if ($pembayaran['sumber'] !== 'midtrans') {
+        return ['ok' => true, 'status' => $pembayaran['status'], 'pesan' => 'Bukan transaksi Midtrans (manual)', 'http_code' => 200];
+    }
+
+    // Jika sudah lunas, tidak perlu melakukan panggilan jaringan ulang (idempoten & hemat kuota)
+    if ($pembayaran['status'] === 'lunas') {
+        return ['ok' => true, 'status' => 'lunas', 'pesan' => 'Pembayaran sudah berstatus lunas', 'http_code' => 200];
+    }
+
+    // 2. Hubungi API Midtrans
+    \Midtrans\Config::$serverKey = $config['MIDTRANS_SERVER_KEY'] ?? '';
+    \Midtrans\Config::$isProduction = (bool)($config['MIDTRANS_IS_PRODUCTION'] ?? false);
+
+    try {
+        $statusObj = \Midtrans\Transaction::status($orderId);
+    } catch (\Exception $e) {
+        $cleanMsg = preg_replace('/(SB-Mid-server-[a-zA-Z0-9_\-]+|Mid-server-[a-zA-Z0-9_\-]+)/', '***REDACTED***', $e->getMessage());
+        error_log("Midtrans Status Check Error ({$orderId}): " . $cleanMsg);
+        return ['ok' => false, 'pesan' => 'Gagal menghubungi server Midtrans: ' . $cleanMsg, 'http_code' => 502];
+    }
+
+    $statusData = [
+        'transaction_status' => is_object($statusObj) ? ($statusObj->transaction_status ?? '') : ($statusObj['transaction_status'] ?? ''),
+        'fraud_status'       => is_object($statusObj) ? ($statusObj->fraud_status ?? null) : ($statusObj['fraud_status'] ?? null),
+        'payment_type'       => is_object($statusObj) ? ($statusObj->payment_type ?? '') : ($statusObj['payment_type'] ?? ''),
+        'transaction_id'     => is_object($statusObj) ? ($statusObj->transaction_id ?? null) : ($statusObj['transaction_id'] ?? null),
+        'settlement_time'    => is_object($statusObj) ? ($statusObj->settlement_time ?? null) : ($statusObj['settlement_time'] ?? null),
+        'gross_amount'       => is_object($statusObj) ? ($statusObj->gross_amount ?? null) : ($statusObj['gross_amount'] ?? null),
+    ];
+
+    return proses_status_transaksi_midtrans($orderId, $statusData);
+}
