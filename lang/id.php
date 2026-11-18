@@ -144,6 +144,7 @@ return [
         'dates' => 'Periode Menginap',
         'status_menunggu' => 'Menunggu Konfirmasi',
         'status_dikonfirmasi' => 'Dikonfirmasi',
+        'status_ditolak' => 'Ditolak',
         'status_selesai' => 'Selesai',
         'status_dibatalkan' => 'Dibatalkan',
         'btn_cancel' => 'Batalkan Reservasi',

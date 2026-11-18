@@ -153,7 +153,47 @@ Dokumen ini mencatat riwayat pelaksanaan tahapan pengembangan, keputusan teknis,
 
 ---
 
-## Tahap 7: Layanan Data Laporan Pemasukan
+## Tahap 8 (Bagian 1): Tampilan Pembayaran Pelanggan dan Pengelola (Dwibahasa, Responsif)
+- **Tanggal/Waktu**: 2026-11-18 (WIB)
+- **Status Gerbang**: LULUS
+- **Ringkasan Pekerjaan**:
+  1. Komponen Bersama & Helper:
+     - `render_badge_pembayaran(string $status, bool $isStaff = false)`: Komponen badge dengan ikon SVG + teks deskriptif (tidak mengandalkan warna semata) untuk status: belum dibayar (netral), menunggu (kuning), lunas (hijau), gagal (merah), kedaluwarsa (abu-abu), serta badge ganda & dibatalkan khusus staf.
+     - `format_metode_pembayaran(?string $metodeKelompok)`: Menampilkan label dwibahasa untuk metode ("Transfer bank", "E-wallet", "Tunai", "Lainnya").
+     - `format_status_reservasi(string $status)`: Menampilkan label status reservasi dwibahasa secara simetris dan terverifikasi oleh pengujian i18n.
+  2. Tampilan Pelanggan (`reservasi-saya.php`):
+     - Tata letak kartu per reservasi dengan badge status reservasi + status pembayaran, estimasi total, dan rincian periode menginap.
+     - Indikator alur 3 langkah jelas: (1) Konfirmasi, (2) Bayar, (3) Selesai.
+     - Tombol aksi kondisional:
+       - Status 'menunggu': teks "Menunggu konfirmasi Pengelola" + tombol kontak WhatsApp.
+       - Status 'dikonfirmasi' & belum bayar: tombol utama "Bayar Sekarang" (Midtrans Snap) + batas waktu bayar 24 jam + catatan bayar tunai di villa.
+       - Status 'menunggu' (Snap token aktif): tombol "Lanjutkan Pembayaran" + tombol "Cek Status Pembayaran".
+       - Status 'gagal' / 'kedaluwarsa': tombol "Bayar Lagi".
+       - Status 'lunas': badge Lunas dengan metode pembayaran, tanggal bayar, tanpa tombol bayar, dan bantuan WhatsApp untuk perubahan.
+       - Status 'ditolak' / 'dibatalkan': tanpa aksi bayar.
+     - Bagian Riwayat Pembayaran (collapsible) yang menampilkan waktu, Order ID, metode, nominal, dan badge status.
+     - Pemuatan library Midtrans Snap JS (`app.sandbox.midtrans.com/snap/snap.js`) hanya jika halaman memuat tombol bayar aktif. Integrasi aman via token CSRF, disabling tombol saat loading, dan penanganan callback (`onSuccess`, `onPending`, `onError`, `onClose`) dengan sinkronisasi ke server sebelum reload.
+  3. Tampilan Pengelola (`dashboard/pengelola.php`):
+     - Tabel daftar reservasi dengan kolom "Pembayaran" (badge + metode) dan penyaring ganda (status reservasi & status pembayaran).
+     - Di layar mobile (<768px), tabel otomatis bertransformasi menjadi tumpukan kartu yang responsif.
+     - Tombol "Catat pembayaran tunai" pada reservasi dikonfirmasi yang belum lunas dengan modal 2 langkah: nominal otomatis dari server (hanya tampil), tanggal bayar, catatan, dan checkbox konfirmasi.
+     - Penegakan aturan bisnis di sisi server: penolakan atau pembatalan reservasi yang sudah lunas diblokir di backend dengan pesan penolakan yang tegas.
+     - Penanda visual "Lewat batas bayar" untuk reservasi dikonfirmasi yang melebihi 24 jam belum lunas (tanpa pembatalan otomatis).
+     - Tombol "Cek status pembayaran" per reservasi dengan AJAX POST dan proteksi CSRF.
+     - Tombol "Kabari via WhatsApp" cerdas: pesan pra-konfirmasi berisi instruksi pembayaran online/tunai beserta nominal dan batas waktu; pesan pasca-lunas berisi ucapan terima kasih dan konfirmasi jadwal.
+  4. Pengujian Otomatis Gerbang Tahap 8 (Bagian 1):
+     - Dibuat dan dieksekusi skrip pengujian `tests/test_tahap8_pelanggan_pengelola.php`.
+     - Uji 1: Halaman Pelanggan memuat Snap JS bersyarat, badge status, dan tombol bayar [LULUS].
+     - Uji 2: Pengujian dwibahasa ID/EN pada halaman Pelanggan [LULUS].
+     - Uji 3: Dashboard Pengelola memuat filter pembayaran, modal tunai 2 langkah, dan template WhatsApp [LULUS].
+     - Uji 4: Penegakan aturan bisnis server mencegah penolakan reservasi lunas [LULUS].
+     - Uji 5: Pemindaian bebas `alert()` browser (seluruh notifikasi menggunakan toast/flash) [LULUS].
+  5. Verifikasi Tambahan:
+     - `php tests/cek-i18n.php`: 100% konsisten antara ID (192 kunci) dan EN (192 kunci), 0 missing keys.
+     - Rebuild Tailwind CSS: `npm run build` sukses.
+     - `git grep "SB-Mid-"`: Bersih dari bocoran API keys.
+     - PHP Lint: Seluruh berkas PHP lulus sintaks tanpa galat.
+
 - **Tanggal/Waktu**: 2026-11-18 (WIB)
 - **Status Gerbang**: LULUS
 - **Ringkasan Pekerjaan**:

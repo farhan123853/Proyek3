@@ -140,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $idReservasi = $pdo->lastInsertId();
 
-            flash_set('success', "Permintaan reservasi berhasil diajukan! Kode Reservasi: #RSV-{$idReservasi}. Status pesanan Anda saat ini sedang menunggu konfirmasi pengelola.");
+            flash_set('success', t('booking.booking_success', ['kode' => "#RSV-{$idReservasi}"]));
             redirect('reservasi-saya.php');
         }
     }

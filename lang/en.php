@@ -144,6 +144,7 @@ return [
         'dates' => 'Stay Period',
         'status_menunggu' => 'Awaiting Confirmation',
         'status_dikonfirmasi' => 'Confirmed',
+        'status_ditolak' => 'Rejected',
         'status_selesai' => 'Completed',
         'status_dibatalkan' => 'Cancelled',
         'btn_cancel' => 'Cancel Reservation',

@@ -343,9 +343,89 @@ function kelompok_metode(?string $paymentType): string
 }
 
 /**
- * Mendapatkan status pembayaran efektif untuk sebuah reservasi
- * Mengembalikan array: ['status' => ..., 'pembayaran' => ...|null]
+ * Format status reservasi mengikuti bahasa aktif
  */
+function format_status_reservasi(string $status): string
+{
+    switch ($status) {
+        case 'menunggu':
+            return t('my_bookings.status_menunggu');
+        case 'dikonfirmasi':
+            return t('my_bookings.status_dikonfirmasi');
+        case 'ditolak':
+            return t('my_bookings.status_ditolak');
+        case 'selesai':
+            return t('my_bookings.status_selesai');
+        case 'dibatalkan':
+            return t('my_bookings.status_dibatalkan');
+        default:
+            return ucfirst($status);
+    }
+}
+
+/**
+ * Format nama metode pembayaran mengikuti bahasa aktif
+ */
+function format_metode_pembayaran(?string $metodeKelompok): string
+{
+    switch ($metodeKelompok) {
+        case 'transfer_bank':
+            return t('payment.method_transfer_bank');
+        case 'e_wallet':
+            return t('payment.method_e_wallet');
+        case 'tunai':
+            return t('payment.method_tunai');
+        case 'lainnya':
+        default:
+            return t('payment.method_lainnya');
+    }
+}
+
+/**
+ * Render komponen badge status pembayaran dengan ikon + teks (aksesibel, tidak bergantung warna saja)
+ */
+function render_badge_pembayaran(string $status, bool $isStaff = false): string
+{
+    switch ($status) {
+        case 'lunas':
+            $label = t('payment.badge_lunas');
+            $icon = '<svg class="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>';
+            return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200" data-payment-status="lunas">' . $icon . '<span>' . e($label) . '</span></span>';
+
+        case 'menunggu':
+            $label = t('payment.badge_menunggu');
+            $icon = '<svg class="w-3.5 h-3.5 text-amber-600 shrink-0 animate-spin-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+            return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200" data-payment-status="menunggu">' . $icon . '<span>' . e($label) . '</span></span>';
+
+        case 'gagal':
+            $label = t('payment.badge_gagal');
+            $icon = '<svg class="w-3.5 h-3.5 text-rose-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>';
+            return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-800 border border-rose-200" data-payment-status="gagal">' . $icon . '<span>' . e($label) . '</span></span>';
+
+        case 'kedaluwarsa':
+            $label = t('payment.badge_kedaluwarsa');
+            $icon = '<svg class="w-3.5 h-3.5 text-slate-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+            return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-300" data-payment-status="kedaluwarsa">' . $icon . '<span>' . e($label) . '</span></span>';
+
+        case 'ganda':
+            if (!$isStaff) return '';
+            $label = t('payment.badge_ganda');
+            $icon = '<svg class="w-3.5 h-3.5 text-purple-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>';
+            return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-800 border border-purple-300" data-payment-status="ganda">' . $icon . '<span>' . e($label) . '</span></span>';
+
+        case 'dibatalkan':
+            if (!$isStaff) return '';
+            $label = t('payment.badge_dibatalkan');
+            $icon = '<svg class="w-3.5 h-3.5 text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>';
+            return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-300" data-payment-status="dibatalkan">' . $icon . '<span>' . e($label) . '</span></span>';
+
+        case 'belum_dibayar':
+        default:
+            $label = t('payment.badge_belum_dibayar');
+            $icon = '<svg class="w-3.5 h-3.5 text-stone-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h8"/></svg>';
+            return '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-stone-100 text-stone-700 border border-stone-300" data-payment-status="belum_dibayar">' . $icon . '<span>' . e($label) . '</span></span>';
+    }
+}
 function status_bayar_efektif(int $idReservasi): array
 {
     $db = get_db();
