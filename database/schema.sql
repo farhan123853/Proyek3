@@ -33,17 +33,21 @@ CREATE TABLE IF NOT EXISTS `tipe_villa` (
   `fasilitas` TEXT NULL -- Menyimpan JSON array fasilitas
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 3. Tabel Reservasi
+-- 3. Tabel Reservasi (Online & Offline)
 CREATE TABLE IF NOT EXISTS `reservasi` (
   `id_reservasi` INT AUTO_INCREMENT PRIMARY KEY,
-  `id_pelanggan` INT NOT NULL,
+  `id_pelanggan` INT NULL,
+  `nama_tamu` VARCHAR(100) NULL,
+  `kontak_tamu` VARCHAR(20) NULL,
+  `sumber` ENUM('online', 'walk_in', 'whatsapp', 'telepon') NOT NULL DEFAULT 'online',
   `id_tipe` INT NOT NULL,
   `diproses_oleh` INT NULL,
+  `dibuat_oleh` INT NULL,
   `tanggal_checkin` DATE NOT NULL,
   `tanggal_checkout` DATE NOT NULL,
   `jumlah_tamu` INT NOT NULL,
   `catatan` TEXT NULL,
-  `status` ENUM('menunggu', 'dikonfirmasi', 'ditolak') NOT NULL DEFAULT 'menunggu',
+  `status` ENUM('menunggu', 'dikonfirmasi', 'ditolak', 'dibatalkan') NOT NULL DEFAULT 'menunggu',
   `harga_weekday_saat_pesan` DECIMAL(12,2) NOT NULL,
   `harga_weekend_saat_pesan` DECIMAL(12,2) NOT NULL,
   `harga_extrabed_saat_pesan` DECIMAL(12,2) NOT NULL,
@@ -52,10 +56,26 @@ CREATE TABLE IF NOT EXISTS `reservasi` (
   INDEX `idx_ketersediaan` (`id_tipe`, `tanggal_checkin`, `tanggal_checkout`, `status`),
   CONSTRAINT `fk_reservasi_pelanggan` FOREIGN KEY (`id_pelanggan`) REFERENCES `pengguna` (`id_pengguna`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `fk_reservasi_tipe` FOREIGN KEY (`id_tipe`) REFERENCES `tipe_villa` (`id_tipe`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `fk_reservasi_pengelola` FOREIGN KEY (`diproses_oleh`) REFERENCES `pengguna` (`id_pengguna`) ON DELETE SET NULL ON UPDATE CASCADE
+  CONSTRAINT `fk_reservasi_pengelola` FOREIGN KEY (`diproses_oleh`) REFERENCES `pengguna` (`id_pengguna`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_reservasi_dibuat_oleh` FOREIGN KEY (`dibuat_oleh`) REFERENCES `pengguna` (`id_pengguna`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 4. Tabel Pembayaran (Transaksi Midtrans & Kas Tunai Manual)
+-- 4. Tabel Blokir Tanggal (Pemeliharaan, Pemilik, dll.)
+CREATE TABLE IF NOT EXISTS `blokir_tanggal` (
+  `id_blokir` INT AUTO_INCREMENT PRIMARY KEY,
+  `id_tipe` INT NOT NULL,
+  `tanggal_mulai` DATE NOT NULL,
+  `tanggal_selesai` DATE NOT NULL COMMENT 'eksklusif, seperti tanggal checkout',
+  `alasan` VARCHAR(200) NOT NULL,
+  `dibuat_oleh` INT NULL,
+  `dibuat_pada` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `dibatalkan_pada` DATETIME NULL,
+  CONSTRAINT `fk_blokir_tipe` FOREIGN KEY (`id_tipe`) REFERENCES `tipe_villa` (`id_tipe`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_blokir_dibuat` FOREIGN KEY (`dibuat_oleh`) REFERENCES `pengguna` (`id_pengguna`) ON DELETE SET NULL ON UPDATE CASCADE,
+  INDEX `idx_blokir_tipe_tanggal` (`id_tipe`, `tanggal_mulai`, `tanggal_selesai`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 5. Tabel Pembayaran (Transaksi Midtrans & Kas Tunai Manual)
 CREATE TABLE IF NOT EXISTS `pembayaran` (
   `id_pembayaran` INT AUTO_INCREMENT PRIMARY KEY,
   `id_reservasi` INT NOT NULL,

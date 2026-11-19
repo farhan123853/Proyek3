@@ -169,13 +169,14 @@ $sqlTrx = "
         p.*,
         r.id_tipe, r.tanggal_checkin, r.tanggal_checkout, r.status AS status_reservasi,
         v.nama AS nama_villa,
-        pel.nama AS nama_pelanggan, pel.email AS email_pelanggan,
+        COALESCE(pel.nama, r.nama_tamu) AS nama_pelanggan,
+        COALESCE(pel.email, '-') AS email_pelanggan,
         staf.nama AS nama_staf,
         batal_staf.nama AS nama_pembatal
     FROM pembayaran p
     JOIN reservasi r ON p.id_reservasi = r.id_reservasi
     JOIN tipe_villa v ON r.id_tipe = v.id_tipe
-    JOIN pengguna pel ON r.id_pelanggan = pel.id_pengguna
+    LEFT JOIN pengguna pel ON r.id_pelanggan = pel.id_pengguna
     LEFT JOIN pengguna staf ON p.dicatat_oleh = staf.id_pengguna
     LEFT JOIN pengguna batal_staf ON p.dibatalkan_oleh = batal_staf.id_pengguna
     {$whereTrxSql}

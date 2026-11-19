@@ -655,3 +655,133 @@ function sinkron_pembayaran(string $orderId): array
 
     return proses_status_transaksi_midtrans($orderId, $statusData);
 }
+
+/**
+ * Hitung ketersediaan unit villa per malam untuk rentang tanggal tertentu.
+ * Dipakai di: api/cek-ketersediaan.php (kalender), reservasi.php (submit),
+ *             dashboard/pengelola.php (konfirmasi), api/reservasi-offline.php,
+ *             api/blokir-tanggal.php — SATU sumber kebenaran.
+ *
+ * Aturan (B — proposal Tahap 11):
+ *   Unit terpakai malam D = reservasi 'dikonfirmasi' (checkin<=D<checkout)
+ *                         + blokir_tanggal aktif yang mencakup D.
+ *   PENUH    = terpakai >= jumlah_unit.
+ *   MENUNGGU = tidak penuh TAPI ada reservasi 'menunggu' pada malam itu
+ *              (peringatan saja, boleh tetap dipesan sesuai F-08).
+ *   TERSEDIA = selain itu.
+ *
+ * @param int      $id_tipe  ID tipe villa
+ * @param string   $dari     Tanggal awal inklusif  (YYYY-MM-DD)
+ * @param string   $sampai   Tanggal akhir eksklusif (YYYY-MM-DD, seperti checkout)
+ * @param PDO|null $db       Koneksi; jika null ambil get_db()
+ * @return array{unit_total:int, malam:array<string,array{terkonfirmasi:int,menunggu:int,diblokir:int,status:string}>}
+ */
+function hitung_ketersediaan(int $id_tipe, string $dari, string $sampai, ?PDO $db = null): array
+{
+    if ($db === null) {
+        $db = get_db();
+    }
+
+    // Ambil jumlah unit villa
+    $stmtVilla = $db->prepare("SELECT jumlah_unit FROM tipe_villa WHERE id_tipe = ? LIMIT 1");
+    $stmtVilla->execute([$id_tipe]);
+    $villa     = $stmtVilla->fetch(PDO::FETCH_ASSOC);
+    $unitTotal = $villa ? (int)$villa['jumlah_unit'] : 1;
+
+    // Bangun daftar malam (dari s.d. sebelum sampai)
+    $result = [];
+    try {
+        $cur = new DateTimeImmutable($dari);
+        $end = new DateTimeImmutable($sampai);
+    } catch (\Exception $e) {
+        return ['unit_total' => $unitTotal, 'malam' => []];
+    }
+    while ($cur < $end) {
+        $key          = $cur->format('Y-m-d');
+        $result[$key] = ['terkonfirmasi' => 0, 'menunggu' => 0, 'diblokir' => 0, 'status' => 'tersedia'];
+        $cur          = $cur->modify('+1 day');
+    }
+    if (empty($result)) {
+        return ['unit_total' => $unitTotal, 'malam' => []];
+    }
+
+    // Reservasi 'dikonfirmasi' yang tumpang tindih
+    $stmtConf = $db->prepare("
+        SELECT tanggal_checkin, tanggal_checkout
+        FROM reservasi
+        WHERE id_tipe    = ?
+          AND status     = 'dikonfirmasi'
+          AND tanggal_checkin  < ?
+          AND tanggal_checkout > ?
+    ");
+    $stmtConf->execute([$id_tipe, $sampai, $dari]);
+    foreach ($stmtConf->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $rCur = new DateTimeImmutable($row['tanggal_checkin']);
+        $rEnd = new DateTimeImmutable($row['tanggal_checkout']);
+        while ($rCur < $rEnd) {
+            $k = $rCur->format('Y-m-d');
+            if (isset($result[$k])) $result[$k]['terkonfirmasi']++;
+            $rCur = $rCur->modify('+1 day');
+        }
+    }
+
+    // Reservasi 'menunggu' yang tumpang tindih
+    $stmtPend = $db->prepare("
+        SELECT tanggal_checkin, tanggal_checkout
+        FROM reservasi
+        WHERE id_tipe    = ?
+          AND status     = 'menunggu'
+          AND tanggal_checkin  < ?
+          AND tanggal_checkout > ?
+    ");
+    $stmtPend->execute([$id_tipe, $sampai, $dari]);
+    foreach ($stmtPend->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $rCur = new DateTimeImmutable($row['tanggal_checkin']);
+        $rEnd = new DateTimeImmutable($row['tanggal_checkout']);
+        while ($rCur < $rEnd) {
+            $k = $rCur->format('Y-m-d');
+            if (isset($result[$k])) $result[$k]['menunggu']++;
+            $rCur = $rCur->modify('+1 day');
+        }
+    }
+
+    // blokir_tanggal aktif (dibatalkan_pada IS NULL)
+    try {
+        $stmtBlokir = $db->prepare("
+            SELECT tanggal_mulai, tanggal_selesai
+            FROM blokir_tanggal
+            WHERE id_tipe           = ?
+              AND dibatalkan_pada   IS NULL
+              AND tanggal_mulai     < ?
+              AND tanggal_selesai   > ?
+        ");
+        $stmtBlokir->execute([$id_tipe, $sampai, $dari]);
+        foreach ($stmtBlokir->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $rCur = new DateTimeImmutable($row['tanggal_mulai']);
+            $rEnd = new DateTimeImmutable($row['tanggal_selesai']);
+            while ($rCur < $rEnd) {
+                $k = $rCur->format('Y-m-d');
+                if (isset($result[$k])) $result[$k]['diblokir']++;
+                $rCur = $rCur->modify('+1 day');
+            }
+        }
+    } catch (\PDOException $e) {
+        // Tabel belum ada (sebelum migration 004), abaikan blokir
+        error_log("hitung_ketersediaan: blokir_tanggal belum tersedia – " . $e->getMessage());
+    }
+
+    // Tentukan status per malam
+    foreach ($result as $date => &$malam) {
+        $totalTerpakai = $malam['terkonfirmasi'] + $malam['diblokir'];
+        if ($totalTerpakai >= $unitTotal) {
+            $malam['status'] = 'penuh';
+        } elseif ($malam['menunggu'] > 0) {
+            $malam['status'] = 'menunggu';
+        } else {
+            $malam['status'] = 'tersedia';
+        }
+    }
+    unset($malam);
+
+    return ['unit_total' => $unitTotal, 'malam' => $result];
+}

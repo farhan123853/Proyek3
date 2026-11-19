@@ -42,19 +42,34 @@ erDiagram
 
     RESERVASI {
         int id_reservasi PK
-        int id_pelanggan FK
+        int id_pelanggan FK "Nullable"
+        varchar nama_tamu "Nullable"
+        varchar kontak_tamu "Nullable"
+        enum sumber "online, walk_in, whatsapp, telepon"
         int id_tipe FK
         int diproses_oleh FK
+        int dibuat_oleh FK
         date tanggal_checkin
         date tanggal_checkout
         int jumlah_tamu
         text catatan
-        enum status "menunggu, dikonfirmasi, ditolak"
+        enum status "menunggu, dikonfirmasi, ditolak, dibatalkan"
         decimal harga_weekday_saat_pesan
         decimal harga_weekend_saat_pesan
         decimal harga_extrabed_saat_pesan
         decimal estimasi_total
         datetime dibuat_pada
+    }
+
+    BLOKIR_TANGGAL {
+        int id_blokir PK
+        int id_tipe FK
+        date tanggal_mulai
+        date tanggal_selesai
+        varchar alasan
+        int dibuat_oleh FK
+        datetime dibuat_pada
+        datetime dibatalkan_pada
     }
 
     PEMBAYARAN {
@@ -118,19 +133,23 @@ Menyimpan master data tipe villa arsitektur Joglo. Nilai diselaraskan dengan dat
 ---
 
 ### Tabel 3: `reservasi`
-Menyimpan transaksi permohonan reservasi villa oleh tamu.
+Menyimpan transaksi permohonan reservasi villa baik secara online oleh pelanggan terdaftar maupun offline (walk-in, WhatsApp, telepon) yang dicatat staf Pengelola.
 
 | Nama Kolom | Tipe Data | Nullable | Keterangan |
 |---|---|---|---|
 | `id_reservasi` | `INT` | No | Primary Key, Auto Increment |
-| `id_pelanggan` | `INT` | No | FK ke `pengguna.id_pengguna` (pembuat reservasi) |
+| `id_pelanggan` | `INT` | Yes | FK ke `pengguna.id_pengguna` (pembuat reservasi online, NULL jika tamu offline) |
+| `nama_tamu` | `VARCHAR(100)` | Yes | Nama tamu (wajib diisi bila `id_pelanggan` NULL) |
+| `kontak_tamu` | `VARCHAR(20)` | Yes | Nomor telepon / WhatsApp tamu |
+| `sumber` | `ENUM` | No | `'online'`, `'walk_in'`, `'whatsapp'`, `'telepon'` (default: `'online'`) |
 | `id_tipe` | `INT` | No | FK ke `tipe_villa.id_tipe` |
 | `diproses_oleh` | `INT` | Yes | FK ke `pengguna.id_pengguna` (staf yang mengonfirmasi/menolak) |
+| `dibuat_oleh` | `INT` | Yes | FK ke `pengguna.id_pengguna` (staf yang mencatat reservasi offline) |
 | `tanggal_checkin` | `DATE` | No | Tanggal mulai menginap (check-in) |
 | `tanggal_checkout` | `DATE` | No | Tanggal keluar (check-out) |
 | `jumlah_tamu` | `INT` | No | Jumlah orang yang menginap |
 | `catatan` | `TEXT` | Yes | Catatan atau permintaan khusus dari tamu |
-| `status` | `ENUM` | No | `'menunggu'`, `'dikonfirmasi'`, `'ditolak'` |
+| `status` | `ENUM` | No | `'menunggu'`, `'dikonfirmasi'`, `'ditolak'`, `'dibatalkan'` |
 | `harga_weekday_saat_pesan` | `DECIMAL(12,2)` | No | Snapshot tarif weekday saat transaksi dibuat |
 | `harga_weekend_saat_pesan` | `DECIMAL(12,2)` | No | Snapshot tarif weekend saat transaksi dibuat |
 | `harga_extrabed_saat_pesan` | `DECIMAL(12,2)` | No | Snapshot tarif extra bed saat transaksi dibuat |
@@ -139,7 +158,23 @@ Menyimpan transaksi permohonan reservasi villa oleh tamu.
 
 ---
 
-### Tabel 4: `pembayaran`
+### Tabel 4: `blokir_tanggal`
+Menyimpan periode tanggal di mana unit villa diblokir dari pemesanan (untuk pemeliharaan rutin, perbaikan fasilitas, atau penggunaan pribadi oleh Pemilik).
+
+| Nama Kolom | Tipe Data | Nullable | Keterangan |
+|---|---|---|---|
+| `id_blokir` | `INT` | No | Primary Key, Auto Increment |
+| `id_tipe` | `INT` | No | FK ke `tipe_villa.id_tipe` |
+| `tanggal_mulai` | `DATE` | No | Tanggal awal pemblokiran (inklusif) |
+| `tanggal_selesai` | `DATE` | No | Tanggal akhir pemblokiran (eksklusif, seperti tanggal check-out) |
+| `alasan` | `VARCHAR(200)` | No | Keterangan alasan pemblokiran (perawatan, pemilik, dll.) |
+| `dibuat_oleh` | `INT` | Yes | FK ke `pengguna.id_pengguna` (staf yang membuat blokir) |
+| `dibuat_pada` | `DATETIME` | No | Waktu pembuatan blokir (default: `CURRENT_TIMESTAMP`) |
+| `dibatalkan_pada` | `DATETIME` | Yes | Waktu pembatalan blokir (soft-cancel; jika diisi, blokir tidak aktif) |
+
+---
+
+### Tabel 5: `pembayaran`
 Menyimpan riwayat percobaan transaksi pembayaran online (Midtrans Snap) dan pencatatan kas tunai oleh Pengelola.
 
 | Nama Kolom | Tipe Data | Nullable | Keterangan |

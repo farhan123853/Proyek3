@@ -103,6 +103,7 @@ $pageDesc  = 'Detail villa joglo premium di Joglo Masayu. Temukan villa yang ses
   </div>
 
   <script src="assets/js/toast.js" defer></script>
+  <script src="assets/js/kalender.js" defer></script>
   <script src="assets/js/script.js" defer></script>
 </body>
 

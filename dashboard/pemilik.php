@@ -52,6 +52,18 @@ $stmtEst = $pdo->query("
 ");
 $estimasi = $stmtEst->fetch();
 
+// 4. Sumber Reservasi (Online vs Offline pada tahun terpilih)
+$stmtSumber = $pdo->prepare("
+    SELECT 
+        SUM(CASE WHEN sumber = 'online' THEN 1 ELSE 0 END) AS total_online,
+        SUM(CASE WHEN sumber IN ('walk_in', 'whatsapp', 'telepon') THEN 1 ELSE 0 END) AS total_offline,
+        COUNT(*) AS total_semua
+    FROM reservasi
+    WHERE YEAR(tanggal_checkin) = ?
+");
+$stmtSumber->execute([$tahun]);
+$statSumber = $stmtSumber->fetch() ?: ['total_online' => 0, 'total_offline' => 0, 'total_semua' => 0];
+
 $isProduction = (bool)($config['MIDTRANS_IS_PRODUCTION'] ?? false);
 
 $pageTitle = t('owner.title') . ' — Villa Joglo Masayu';
@@ -491,6 +503,26 @@ if ($maxBulanNominal === 0) $maxBulanNominal = 1;
         </div>
       </div>
 
+    </div>
+
+    <!-- 8. Kartu Sumber Reservasi (Online vs Offline - Read-only Tahap 11) -->
+    <div class="bg-white border border-stone-200 rounded-2xl p-5 mb-8 shadow-sm">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm uppercase tracking-wider font-bold text-stone-700 mb-0"><?= t('owner.source_card_title') ?> (<?= $tahun ?>)</h3>
+        <span class="text-xs text-stone-500 font-medium"><?= (int)$statSumber['total_semua'] ?> total reservasi</span>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="bg-sky-50 border border-sky-200 rounded-xl p-4 text-center">
+          <span class="text-xs text-sky-800 font-semibold block uppercase tracking-wider mb-1"><?= t('offline.sumber_online') ?></span>
+          <div class="text-2xl font-serif font-bold text-sky-900"><?= (int)$statSumber['total_online'] ?></div>
+          <p class="text-[11px] text-sky-700 mt-1 mb-0">Website / Pelanggan</p>
+        </div>
+        <div class="bg-violet-50 border border-violet-200 rounded-xl p-4 text-center">
+          <span class="text-xs text-violet-800 font-semibold block uppercase tracking-wider mb-1"><?= t('owner.source_offline') ?></span>
+          <div class="text-2xl font-serif font-bold text-violet-900"><?= (int)$statSumber['total_offline'] ?></div>
+          <p class="text-[11px] text-violet-700 mt-1 mb-0">Walk-in, WhatsApp, Telepon</p>
+        </div>
+      </div>
     </div>
 
   </div>

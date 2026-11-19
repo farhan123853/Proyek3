@@ -15,6 +15,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (!villaSelect || !checkinInput || !checkoutInput || !tamuInput) return;
 
+  // Inisialisasi Kalender Interaktif (Tahap 11)
+  let calInstance = null;
+  const calBox = document.getElementById('reservasiCalendarBox');
+  if (calBox && typeof MasayuKalender === 'function') {
+    calInstance = new MasayuKalender(calBox, {
+      mode: 'select',
+      idTipe: parseInt(villaSelect.value) || 1,
+      checkinInput: checkinInput,
+      checkoutInput: checkoutInput,
+      lang: window.MASAYU_LANG || 'id',
+      onRangeSelect: (inDate, outDate) => {
+        checkinInput.value = inDate;
+        checkoutInput.value = outDate;
+        cekKetersediaanDanTarif();
+      }
+    });
+  }
+
   // Set min date hari ini
   const today = new Date().toISOString().split('T')[0];
   checkinInput.min = today;
@@ -34,6 +52,9 @@ document.addEventListener('DOMContentLoaded', () => {
   checkoutInput.addEventListener('change', cekKetersediaanDanTarif);
   villaSelect.addEventListener('change', () => {
     updateMaxTamu();
+    if (calInstance) {
+      calInstance.setTipe(parseInt(villaSelect.value) || 1);
+    }
     cekKetersediaanDanTarif();
   });
   tamuInput.addEventListener('input', cekKetersediaanDanTarif);

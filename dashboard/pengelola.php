@@ -19,6 +19,9 @@ require_role(['pengelola', 'admin'], 'login.php');
 $pdo = get_db();
 $currentUserId = current_user_id();
 
+// Daftar tipe villa untuk form reservasi offline dan blokir
+$villasList = $pdo->query("SELECT id_tipe, nama, kapasitas_maks FROM tipe_villa ORDER BY id_tipe ASC")->fetchAll();
+
 // 1. Tangani Aksi Konfirmasi / Tolak via POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi'])) {
     csrf_verify();
@@ -47,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi'])) {
             try {
                 $pdo->beginTransaction();
 
-                // 1. Ambil data reservasi target
+                // 1. Ambil data reservasi target (kunci baris)
                 $stmtTarget = $pdo->prepare("SELECT * FROM `reservasi` WHERE `id_reservasi` = ? FOR UPDATE");
                 $stmtTarget->execute([$idReservasi]);
                 $target = $stmtTarget->fetch();
@@ -58,34 +61,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi'])) {
                     redirect('dashboard/pengelola.php');
                 }
 
-                // 2. Ambil data tipe villa dan jumlah unit
+                // 2. Kunci baris tipe villa sebagai mutex per tipe
                 $stmtVilla = $pdo->prepare("SELECT `id_tipe`, `nama`, `jumlah_unit` FROM `tipe_villa` WHERE `id_tipe` = ? FOR UPDATE");
                 $stmtVilla->execute([$target['id_tipe']]);
                 $villaInfo = $stmtVilla->fetch();
 
-                $jumlahUnit = (int)($villaInfo['jumlah_unit'] ?? 1);
+                // 3. Periksa ketersediaan menggunakan hitung_ketersediaan() — satu sumber kebenaran
+                $ketersediaan = hitung_ketersediaan($target['id_tipe'], $target['tanggal_checkin'], $target['tanggal_checkout'], $pdo);
 
-                // 3. Periksa ketersediaan: hitung reservasi lain yang telah dikonfirmasi dan tumpang tindih
-                $sqlCheck = "SELECT COUNT(*) FROM `reservasi` 
-                             WHERE `id_tipe` = :id_tipe 
-                               AND `status` = 'dikonfirmasi' 
-                               AND `id_reservasi` != :id_target
-                               AND `tanggal_checkin` < :checkout 
-                               AND `tanggal_checkout` > :checkin 
-                             FOR UPDATE";
+                // Cek apakah ada malam penuh selain reservasi ini sendiri
+                // (reservasi ini masih 'menunggu' jadi belum dihitung di terkonfirmasi)
+                $adaPenuh = false;
+                $tanggalPenuh = '';
+                foreach ($ketersediaan['malam'] as $tgl => $malam) {
+                    if ($malam['status'] === 'penuh') {
+                        $adaPenuh = true;
+                        $tanggalPenuh = $tgl;
+                        break;
+                    }
+                }
 
-                $stmtCheck = $pdo->prepare($sqlCheck);
-                $stmtCheck->execute([
-                    'id_tipe'    => $target['id_tipe'],
-                    'id_target'  => $idReservasi,
-                    'checkout'   => $target['tanggal_checkout'],
-                    'checkin'    => $target['tanggal_checkin']
-                ]);
-                $bentrok = (int)$stmtCheck->fetchColumn();
-
-                if ($bentrok >= $jumlahUnit) {
+                if ($adaPenuh) {
                     $pdo->rollBack();
-                    flash_set('danger', "Gagal mengonfirmasi #RSV-{$idReservasi}: Seluruh unit ({$jumlahUnit} unit) {$villaInfo['nama']} sudah terisi pada tanggal tersebut.");
+                    flash_set('danger', "Gagal mengonfirmasi #RSV-{$idReservasi}: Seluruh unit {$villaInfo['nama']} sudah terisi pada tanggal {$tanggalPenuh}.");
                     redirect('dashboard/pengelola.php');
                 }
 
@@ -103,6 +101,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi'])) {
                 flash_set('danger', 'Terjadi kesalahan sistem saat memproses konfirmasi: ' . $e->getMessage());
                 redirect('dashboard/pengelola.php');
             }
+        } elseif ($aksi === 'batalkan_offline') {
+            // Batalkan reservasi offline yang belum lunas
+            try {
+                $alasanBatal = trim($_POST['alasan_batal'] ?? '');
+                if (strlen($alasanBatal) < 3) {
+                    flash_set('danger', t('offline.error_alasan_batal'));
+                    redirect('dashboard/pengelola.php');
+                }
+                $pdo->beginTransaction();
+                $stmtCek = $pdo->prepare("SELECT r.*, p.status AS bayar_status FROM reservasi r LEFT JOIN pembayaran p ON p.id_reservasi = r.id_reservasi AND p.status = 'lunas' WHERE r.id_reservasi = ? FOR UPDATE");
+                $stmtCek->execute([$idReservasi]);
+                $cekR = $stmtCek->fetch();
+                if (!$cekR) {
+                    $pdo->rollBack();
+                    flash_set('danger', 'Reservasi tidak ditemukan.');
+                    redirect('dashboard/pengelola.php');
+                }
+                if ($cekR['bayar_status'] === 'lunas') {
+                    $pdo->rollBack();
+                    flash_set('danger', t('offline.error_batal_sudah_lunas'));
+                    redirect('dashboard/pengelola.php');
+                }
+                $stmtBatal = $pdo->prepare("UPDATE reservasi SET status = 'dibatalkan' WHERE id_reservasi = ?");
+                $stmtBatal->execute([$idReservasi]);
+                $pdo->commit();
+                flash_set('success', t('offline.batal_success', ['kode' => "#RSV-{$idReservasi}"]));
+                redirect('dashboard/pengelola.php');
+            } catch (Exception $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                flash_set('danger', 'Terjadi kesalahan saat membatalkan reservasi.');
+                redirect('dashboard/pengelola.php');
+            }
         }
     }
 }
@@ -110,8 +140,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi'])) {
 // 2. Filter Status Reservasi & Pembayaran
 $filterStatus = trim($_GET['status'] ?? '');
 $filterBayar  = trim($_GET['bayar'] ?? '');
+$filterSumber = trim($_GET['sumber'] ?? '');
 
-$allowedStatus = ['menunggu', 'dikonfirmasi', 'ditolak'];
+$allowedStatus = ['menunggu', 'dikonfirmasi', 'ditolak', 'dibatalkan'];
+$allowedSumber = ['online', 'walk_in', 'whatsapp', 'telepon'];
 $whereClauses = [];
 $params = [];
 
@@ -119,15 +151,23 @@ if (in_array($filterStatus, $allowedStatus, true)) {
     $whereClauses[] = "r.status = ?";
     $params[] = $filterStatus;
 }
+// Filter sumber reservasi
+if (in_array($filterSumber, $allowedSumber, true)) {
+    $whereClauses[] = "r.sumber = ?";
+    $params[] = $filterSumber;
+}
 
 $whereSql = !empty($whereClauses) ? "WHERE " . implode(" AND ", $whereClauses) : "";
 
 $sql = "SELECT r.*, v.nama AS nama_villa, v.slug AS slug_villa, 
-               p.nama AS nama_pelanggan, p.email AS email_pelanggan, p.kontak AS kontak_pelanggan,
-               staf.nama AS nama_staf
+               COALESCE(p.nama, r.nama_tamu) AS nama_pelanggan,
+               p.email AS email_pelanggan,
+               COALESCE(p.kontak, r.kontak_tamu) AS kontak_pelanggan,
+               staf.nama AS nama_staf,
+               r.sumber AS sumber_reservasi
         FROM `reservasi` r
         JOIN `tipe_villa` v ON r.id_tipe = v.id_tipe
-        JOIN `pengguna` p ON r.id_pelanggan = p.id_pengguna
+        LEFT JOIN `pengguna` p ON r.id_pelanggan = p.id_pengguna
         LEFT JOIN `pengguna` staf ON r.diproses_oleh = staf.id_pengguna
         {$whereSql}
         ORDER BY 
@@ -169,6 +209,22 @@ foreach ($rawList as $r) {
     $r['is_lewat_batas'] = ($r['status'] === 'dikonfirmasi' && $statusBayar !== 'lunas' && time() > $tsBatas);
     $r['batas_waktu_str'] = date('d/m/Y H:i', $tsBatas) . ' WIB';
 
+    // Deteksi "bentrok": reservasi menunggu yang bertabrakan dengan yang sudah dikonfirmasi
+    $r['is_bentrok'] = false;
+    if ($r['status'] === 'menunggu') {
+        $stmtBentrok = $pdo->prepare("
+            SELECT COUNT(*) FROM reservasi
+            WHERE id_tipe = ? AND status = 'dikonfirmasi'
+              AND tanggal_checkin < ? AND tanggal_checkout > ?
+        ");
+        $stmtBentrok->execute([$r['id_tipe'], $r['tanggal_checkout'], $r['tanggal_checkin']]);
+        $jumlahKonfirmasi = (int)$stmtBentrok->fetchColumn();
+        $r['is_bentrok'] = ($jumlahKonfirmasi >= (int)($r['jumlah_unit'] ?? 999));
+    }
+
+    // Sumber reservasi (default 'online' jika kolom belum ada)
+    $r['sumber_reservasi'] = $r['sumber_reservasi'] ?? ($r['sumber'] ?? 'online');
+
     $reservasiList[] = $r;
 }
 
@@ -194,6 +250,16 @@ require_once __DIR__ . '/../includes/layout/head.php';
       <p class="text-xs uppercase tracking-widest font-semibold text-amber-800 mb-1"><?= t('dashboard.pengelola_title') ?></p>
       <h1 class="text-2xl md:text-3xl font-serif text-stone-900 mb-1"><?= t('dashboard.pengelola_title') ?></h1>
       <p class="text-sm text-stone-600 mb-0">Kelola reservasi tamu, verifikasi pembayaran, dan pencatatan kas masuk.</p>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <a href="kalender-hunian.php" class="btn btn-sm btn-outline-gold text-xs py-2 px-4">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <?= t('occupancy.title') ?>
+      </a>
+      <button type="button" id="btnTambahOffline" class="btn btn-sm btn-gold text-xs py-2 px-4" onclick="document.getElementById('modalOffline').classList.remove('hidden')">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        <?= t('offline.btn_tambah') ?>
+      </button>
     </div>
   </div>
 
@@ -243,7 +309,16 @@ require_once __DIR__ . '/../includes/layout/head.php';
         <option value="gagal_kedaluwarsa" <?= $filterBayar === 'gagal_kedaluwarsa' ? 'selected' : '' ?>>Gagal / Kedaluwarsa</option>
       </select>
 
-      <?php if ($filterStatus || $filterBayar): ?>
+      <!-- Filter Sumber -->
+      <select name="sumber" class="form-control text-xs py-1.5 px-3 rounded-lg border-stone-300 w-auto" onchange="this.form.submit()">
+        <option value=""><?= t('offline.filter_all_sumber') ?></option>
+        <option value="online" <?= $filterSumber === 'online' ? 'selected' : '' ?>><?= t('offline.sumber_online') ?></option>
+        <option value="walk_in" <?= $filterSumber === 'walk_in' ? 'selected' : '' ?>><?= t('offline.sumber_walk_in') ?></option>
+        <option value="whatsapp" <?= $filterSumber === 'whatsapp' ? 'selected' : '' ?>><?= t('offline.sumber_whatsapp') ?></option>
+        <option value="telepon" <?= $filterSumber === 'telepon' ? 'selected' : '' ?>><?= t('offline.sumber_telepon') ?></option>
+      </select>
+
+      <?php if ($filterStatus || $filterBayar || $filterSumber): ?>
         <a href="dashboard/pengelola.php" class="text-xs text-amber-800 hover:underline font-semibold ml-1">Reset Filter</a>
       <?php endif; ?>
     </form>
@@ -287,6 +362,17 @@ require_once __DIR__ . '/../includes/layout/head.php';
                   <div class="font-mono font-bold text-amber-900 text-xs">#RSV-<?= $idRes ?></div>
                   <div class="font-semibold text-stone-900 text-sm mt-0.5"><?= e($r['nama_pelanggan']) ?></div>
                   <div class="text-xs text-stone-500"><?= e($r['kontak_pelanggan']) ?></div>
+                  <?php
+                    $sumberR = $r['sumber_reservasi'] ?? ($r['sumber'] ?? 'online');
+                    $sumberLabels = ['online'=>'Online','walk_in'=>'Langsung','whatsapp'=>'WhatsApp','telepon'=>'Telepon'];
+                    $sumberColors = ['online'=>'bg-sky-50 text-sky-700 border-sky-200','walk_in'=>'bg-violet-50 text-violet-700 border-violet-200','whatsapp'=>'bg-emerald-50 text-emerald-700 border-emerald-200','telepon'=>'bg-orange-50 text-orange-700 border-orange-200'];
+                    $sLabel = $sumberLabels[$sumberR] ?? $sumberR;
+                    $sColor = $sumberColors[$sumberR] ?? 'bg-stone-50 text-stone-600 border-stone-200';
+                  ?>
+                  <span class="inline-block mt-1 text-[10px] font-semibold border px-1.5 py-0.5 rounded <?= $sColor ?>"><?= e($sLabel) ?></span>
+                  <?php if (!empty($r['is_bentrok'])): ?>
+                    <span class="inline-block mt-1 text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 px-1.5 py-0.5 rounded">⚠ <?= t('offline.badge_bentrok') ?></span>
+                  <?php endif; ?>
                 </td>
                 <td class="p-3.5 font-medium text-stone-800 text-xs">
                   <?= e($r['nama_villa']) ?>
@@ -635,6 +721,288 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 });
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL: RESERVASI OFFLINE
+═══════════════════════════════════════════════════════════ -->
+<div id="modalOffline" class="hidden fixed inset-0 z-[200] flex items-start justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="modalOfflineTitle">
+  <div class="absolute inset-0 bg-black/50" onclick="document.getElementById('modalOffline').classList.add('hidden')"></div>
+  <div class="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full my-8 z-10">
+    <div class="flex items-center justify-between p-5 border-b border-stone-200">
+      <h2 id="modalOfflineTitle" class="text-lg font-serif font-bold text-stone-900"><?= t('offline.title') ?></h2>
+      <button type="button" class="text-stone-400 hover:text-stone-700 p-1 rounded" onclick="document.getElementById('modalOffline').classList.add('hidden')" aria-label="Tutup">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="formOffline" class="p-5 space-y-4">
+      <?= csrf_field() ?>
+      <div id="offlineAlertBox" class="hidden"></div>
+
+      <!-- Sumber -->
+      <div class="form-group">
+        <label class="form-label text-sm" for="offline_sumber"><?= t('offline.sumber_label') ?> <span class="required">*</span></label>
+        <select id="offline_sumber" name="sumber" class="form-control text-sm" required>
+          <option value="walk_in"><?= t('offline.sumber_walk_in') ?></option>
+          <option value="whatsapp"><?= t('offline.sumber_whatsapp') ?></option>
+          <option value="telepon"><?= t('offline.sumber_telepon') ?></option>
+        </select>
+      </div>
+
+      <!-- Nama & Kontak Tamu -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="form-group">
+          <label class="form-label text-sm" for="offline_nama"><?= t('offline.nama_tamu') ?> <span class="required">*</span></label>
+          <input type="text" id="offline_nama" name="nama_tamu" class="form-control text-sm" placeholder="Min. 2 karakter" required minlength="2" maxlength="100" />
+        </div>
+        <div class="form-group">
+          <label class="form-label text-sm" for="offline_kontak"><?= t('offline.kontak_tamu') ?> <span class="required">*</span></label>
+          <input type="tel" id="offline_kontak" name="kontak_tamu" class="form-control text-sm" placeholder="08xx / 628xx (9-15 digit)" required />
+        </div>
+      </div>
+
+      <!-- Tipe Villa -->
+      <div class="form-group">
+        <label class="form-label text-sm" for="offline_tipe"><?= t('booking.villa_label') ?> <span class="required">*</span></label>
+        <select id="offline_tipe" name="id_tipe" class="form-control text-sm" required>
+          <option value="">-- Pilih Tipe Villa --</option>
+          <?php foreach ($villasList ?? [] as $v): ?>
+            <option value="<?= e($v['id_tipe']) ?>" data-max="<?= e($v['kapasitas_maks']) ?>"><?= e($v['nama']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+
+      <!-- Tanggal -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="form-group">
+          <label class="form-label text-sm" for="offline_checkin"><?= t('booking.checkin_label') ?> <span class="required">*</span></label>
+          <input type="date" id="offline_checkin" name="tanggal_checkin" class="form-control text-sm" min="<?= date('Y-m-d') ?>" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label text-sm" for="offline_checkout"><?= t('booking.checkout_label') ?> <span class="required">*</span></label>
+          <input type="date" id="offline_checkout" name="tanggal_checkout" class="form-control text-sm" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" required />
+        </div>
+      </div>
+
+      <!-- Jumlah Tamu -->
+      <div class="form-group">
+        <label class="form-label text-sm" for="offline_tamu"><?= t('booking.guests_label') ?> <span class="required">*</span></label>
+        <input type="number" id="offline_tamu" name="jumlah_tamu" class="form-control text-sm" value="2" min="1" max="20" required />
+        <div id="offline_tamu_hint" class="form-hint text-xs"></div>
+      </div>
+
+      <!-- Catatan -->
+      <div class="form-group">
+        <label class="form-label text-sm" for="offline_catatan"><?= t('booking.special_requests') ?></label>
+        <textarea id="offline_catatan" name="catatan" class="form-control text-sm" rows="2" maxlength="500" placeholder="Opsional..."></textarea>
+      </div>
+
+      <!-- Catat Tunai Sekarang -->
+      <div class="flex items-center gap-2">
+        <input type="checkbox" id="offline_catat_tunai" name="catat_tunai" value="1" class="w-4 h-4 rounded text-amber-600 border-stone-300" />
+        <label for="offline_catat_tunai" class="text-sm text-stone-700 cursor-pointer"><?= t('offline.catat_tunai_label') ?></label>
+      </div>
+
+      <input type="hidden" name="konfirmasi_conflict" id="offline_konfirmasi_conflict" value="0" />
+
+      <div class="flex justify-end gap-3 pt-2 border-t border-stone-100">
+        <button type="button" class="btn btn-ghost text-sm" onclick="document.getElementById('modalOffline').classList.add('hidden')"><?= t('common.cancel') ?></button>
+        <button type="submit" id="btnOfflineSubmit" class="btn btn-gold text-sm"><?= t('offline.btn_simpan') ?></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL: BLOKIR TANGGAL
+═══════════════════════════════════════════════════════════ -->
+<div id="modalBlokir" class="hidden fixed inset-0 z-[200] flex items-start justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="modalBlokirTitle">
+  <div class="absolute inset-0 bg-black/50" onclick="document.getElementById('modalBlokir').classList.add('hidden')"></div>
+  <div class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full my-8 z-10">
+    <div class="flex items-center justify-between p-5 border-b border-stone-200">
+      <h2 id="modalBlokirTitle" class="text-lg font-serif font-bold text-stone-900"><?= t('block.title') ?></h2>
+      <button type="button" class="text-stone-400 hover:text-stone-700 p-1 rounded" onclick="document.getElementById('modalBlokir').classList.add('hidden')" aria-label="Tutup">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <form id="formBlokir" class="p-5 space-y-4">
+      <?= csrf_field() ?>
+      <div id="blokirAlertBox" class="hidden"></div>
+
+      <div class="form-group">
+        <label class="form-label text-sm" for="blokir_tipe"><?= t('booking.villa_label') ?> <span class="required">*</span></label>
+        <select id="blokir_tipe" name="id_tipe" class="form-control text-sm" required>
+          <option value="">-- Pilih Tipe Villa --</option>
+          <?php foreach ($villasList ?? [] as $v): ?>
+            <option value="<?= e($v['id_tipe']) ?>"><?= e($v['nama']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="form-group">
+          <label class="form-label text-sm" for="blokir_mulai"><?= t('block.mulai_label') ?> <span class="required">*</span></label>
+          <input type="date" id="blokir_mulai" name="tanggal_mulai" class="form-control text-sm" min="<?= date('Y-m-d') ?>" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label text-sm" for="blokir_selesai"><?= t('block.selesai_label') ?> <span class="required">*</span></label>
+          <input type="date" id="blokir_selesai" name="tanggal_selesai" class="form-control text-sm" required />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label text-sm" for="blokir_alasan"><?= t('block.alasan_label') ?> <span class="required">*</span></label>
+        <select id="blokir_alasan_preset" class="form-control text-sm mb-2" onchange="document.getElementById('blokir_alasan').value=this.value">
+          <option value=""><?= t('block.pilih_alasan') ?></option>
+          <option value="<?= t('block.reason_maintenance') ?>"><?= t('block.reason_maintenance') ?></option>
+          <option value="<?= t('block.reason_owner') ?>"><?= t('block.reason_owner') ?></option>
+        </select>
+        <input type="text" id="blokir_alasan" name="alasan" class="form-control text-sm" placeholder="<?= t('block.alasan_placeholder') ?>" maxlength="200" required minlength="2" />
+      </div>
+      <div class="flex justify-end gap-3 pt-2 border-t border-stone-100">
+        <button type="button" class="btn btn-ghost text-sm" onclick="document.getElementById('modalBlokir').classList.add('hidden')"><?= t('common.cancel') ?></button>
+        <button type="submit" id="btnBlokirSubmit" class="btn btn-danger text-sm"><?= t('block.btn_blokir') ?></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Tombol aksi bawah (blokir + reservasi offline) untuk mobile -->
+<div class="fixed bottom-5 right-5 flex flex-col gap-2 z-50">
+  <button type="button" onclick="document.getElementById('modalBlokir').classList.remove('hidden')"
+    class="inline-flex items-center gap-2 bg-rose-700 hover:bg-rose-800 text-white text-sm font-semibold px-4 py-2.5 rounded-full shadow-lg min-h-[44px]"
+    aria-label="<?= t('block.title') ?>">
+    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-12.728 12.728M5.636 5.636l12.728 12.728"/></svg>
+    <?= t('block.btn_blokir') ?>
+  </button>
+  <button type="button" onclick="document.getElementById('modalOffline').classList.remove('hidden')"
+    class="inline-flex items-center gap-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-semibold px-4 py-2.5 rounded-full shadow-lg min-h-[44px]"
+    aria-label="<?= t('offline.btn_tambah') ?>">
+    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    <?= t('offline.btn_tambah') ?>
+  </button>
+</div>
+
+<script>
+(function(){
+  // ─── Form Reservasi Offline ─────────────────────────────────────────────
+  var formOffline = document.getElementById('formOffline');
+  if (formOffline) {
+    // Update max tamu jika tipe villa berubah
+    document.getElementById('offline_tipe').addEventListener('change', function(){
+      var opt = this.options[this.selectedIndex];
+      var max = opt.getAttribute('data-max') || '';
+      var hint = document.getElementById('offline_tamu_hint');
+      if (max) {
+        hint.textContent = 'Kapasitas maksimal: ' + max + ' orang';
+        document.getElementById('offline_tamu').max = max;
+      } else {
+        hint.textContent = '';
+      }
+    });
+
+    formOffline.addEventListener('submit', function(e){
+      e.preventDefault();
+      var btn = document.getElementById('btnOfflineSubmit');
+      var alertBox = document.getElementById('offlineAlertBox');
+      btn.disabled = true;
+      var orig = btn.textContent;
+      btn.textContent = '...';
+
+      var fd = new FormData(formOffline);
+
+      fetch('api/reservasi-offline.php', {
+        method: 'POST',
+        body: fd
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data.ok) {
+          document.getElementById('modalOffline').classList.add('hidden');
+          if (typeof showToast === 'function') showToast(data.pesan || 'Reservasi berhasil!', 'success');
+          setTimeout(function(){ window.location.reload(); }, 1200);
+        } else if (data.perlu_konfirmasi) {
+          // Tampilkan peringatan conflict
+          alertBox.className = 'bg-amber-50 border border-amber-300 rounded-lg p-3 text-sm text-amber-900';
+          alertBox.textContent = data.pesan;
+          alertBox.classList.remove('hidden');
+          document.getElementById('offline_konfirmasi_conflict').value = '1';
+          btn.textContent = 'Simpan Meski Ada Peringatan';
+          btn.disabled = false;
+        } else {
+          alertBox.className = 'bg-rose-50 border border-rose-300 rounded-lg p-3 text-sm text-rose-900';
+          alertBox.textContent = data.pesan || 'Terjadi kesalahan.';
+          alertBox.classList.remove('hidden');
+          btn.disabled = false;
+          btn.textContent = orig;
+        }
+      })
+      .catch(function(){
+        alertBox.className = 'bg-rose-50 border border-rose-300 rounded-lg p-3 text-sm text-rose-900';
+        alertBox.textContent = 'Kesalahan jaringan.';
+        alertBox.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = orig;
+      });
+    });
+  }
+
+  // ─── Form Blokir Tanggal ─────────────────────────────────────────────────
+  var formBlokir = document.getElementById('formBlokir');
+  if (formBlokir) {
+    document.getElementById('blokir_mulai').addEventListener('change', function(){
+      var v = this.value;
+      if (v) {
+        var next = new Date(v);
+        next.setDate(next.getDate() + 1);
+        document.getElementById('blokir_selesai').min = next.toISOString().split('T')[0];
+      }
+    });
+
+    formBlokir.addEventListener('submit', function(e){
+      e.preventDefault();
+      var btn = document.getElementById('btnBlokirSubmit');
+      var alertBox = document.getElementById('blokirAlertBox');
+      btn.disabled = true;
+      var orig = btn.textContent;
+      btn.textContent = '...';
+
+      var fd = new FormData(formBlokir);
+
+      fetch('api/blokir-tanggal.php', {
+        method: 'POST',
+        body: fd
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if (data.ok) {
+          document.getElementById('modalBlokir').classList.add('hidden');
+          if (typeof showToast === 'function') showToast(data.pesan || 'Blokir berhasil!', 'success');
+          setTimeout(function(){ window.location.reload(); }, 1200);
+        } else {
+          alertBox.className = 'bg-rose-50 border border-rose-300 rounded-lg p-3 text-sm text-rose-900';
+          alertBox.textContent = data.pesan || 'Terjadi kesalahan.';
+          alertBox.classList.remove('hidden');
+          btn.disabled = false;
+          btn.textContent = orig;
+        }
+      })
+      .catch(function(){
+        alertBox.className = 'bg-rose-50 border border-rose-300 rounded-lg p-3 text-sm text-rose-900';
+        alertBox.textContent = 'Kesalahan jaringan.';
+        alertBox.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = orig;
+      });
+    });
+  }
+
+  // Keyboard ESC menutup modal
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') {
+      document.getElementById('modalOffline')?.classList.add('hidden');
+      document.getElementById('modalBlokir')?.classList.add('hidden');
+    }
+  });
+})();
 </script>
 
 <?php require_once __DIR__ . '/../includes/layout/foot.php'; ?>

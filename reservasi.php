@@ -79,69 +79,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // 4. Periksa Ketersediaan Unit Berdasarkan Reservasi "dikonfirmasi"
+    // 4. Periksa Ketersediaan Unit dan Simpan Reservasi dalam Transaksi dengan Kunci Mutex (FOR UPDATE)
     if (empty($errors) && $selectedVilla) {
-        $sqlOverlap = "SELECT COUNT(*) FROM `reservasi` 
-                       WHERE `id_tipe` = :id_tipe 
-                         AND `status` = 'dikonfirmasi' 
-                         AND `tanggal_checkin` < :checkout 
-                         AND `tanggal_checkout` > :checkin";
-        $stmtCek = $pdo->prepare($sqlOverlap);
-        $stmtCek->execute([
-            'id_tipe'  => $idTipe,
-            'checkout' => $checkout,
-            'checkin'  => $checkin
-        ]);
-        $terpesan = (int)$stmtCek->fetchColumn();
-        $unitTersedia = (int)$selectedVilla['jumlah_unit'];
+        try {
+            $pdo->beginTransaction();
 
-        if ($terpesan >= $unitTersedia) {
-            $errors['ketersediaan'] = "Maaf, seluruh unit untuk {$selectedVilla['nama']} telah terpesan pada rentang tanggal tersebut. Silakan pilih tanggal atau tipe villa lain.";
-        }
-    }
+            // Mutex kunci baris tipe_villa untuk mencegah race condition
+            $stmtLock = $pdo->prepare("SELECT `jumlah_unit` FROM `tipe_villa` WHERE `id_tipe` = ? FOR UPDATE");
+            $stmtLock->execute([$idTipe]);
+            $stmtLock->fetch();
 
-    // 5. Hitung Snapshot Tarif dan Simpan Reservasi
-    if (empty($errors) && $selectedVilla) {
-        $rincian = hitung_rincian_tarif(
-            $checkin,
-            $checkout,
-            $jumlahTamu,
-            (int)$selectedVilla['kapasitas_standar'],
-            (int)$selectedVilla['kapasitas_maks'],
-            (float)$selectedVilla['harga_weekday'],
-            (float)$selectedVilla['harga_weekend'],
-            (float)$selectedVilla['harga_extrabed']
-        );
+            $ketersediaan = hitung_ketersediaan($idTipe, $checkin, $checkout, $pdo);
+            $adaPenuh = false;
+            $tanggalPenuh = '';
+            foreach ($ketersediaan['malam'] as $tgl => $malam) {
+                if ($malam['status'] === 'penuh') {
+                    $adaPenuh = true;
+                    $tanggalPenuh = $tgl;
+                    break;
+                }
+            }
+            if ($adaPenuh) {
+                $pdo->rollBack();
+                $errors['ketersediaan'] = "Maaf, seluruh unit untuk {$selectedVilla['nama']} telah terpesan pada " . date('d/m/Y', strtotime($tanggalPenuh)) . ". Silakan pilih tanggal atau tipe villa lain.";
+            } else {
+                $rincian = hitung_rincian_tarif(
+                    $checkin,
+                    $checkout,
+                    $jumlahTamu,
+                    (int)$selectedVilla['kapasitas_standar'],
+                    (int)$selectedVilla['kapasitas_maks'],
+                    (float)$selectedVilla['harga_weekday'],
+                    (float)$selectedVilla['harga_weekend'],
+                    (float)$selectedVilla['harga_extrabed']
+                );
 
-        if (!$rincian) {
-            $errors['umum'] = 'Terjadi kesalahan saat menghitung rincian durasi menginap. Silakan periksa kembali tanggal yang Anda masukkan.';
-        } else {
-            // F-09: Simpan status awal "menunggu"
-            $sqlInsert = "INSERT INTO `reservasi` (
-                            `id_pelanggan`, `id_tipe`, `tanggal_checkin`, `tanggal_checkout`,
-                            `jumlah_tamu`, `catatan`, `status`,
-                            `harga_weekday_saat_pesan`, `harga_weekend_saat_pesan`, `harga_extrabed_saat_pesan`,
-                            `estimasi_total`, `dibuat_pada`
-                          ) VALUES (?, ?, ?, ?, ?, ?, 'menunggu', ?, ?, ?, ?, NOW())";
+                if (!$rincian) {
+                    $pdo->rollBack();
+                    $errors['umum'] = 'Terjadi kesalahan saat menghitung rincian durasi menginap. Silakan periksa kembali tanggal yang Anda masukkan.';
+                } else {
+                    // F-09: Simpan status awal "menunggu"
+                    $sqlInsert = "INSERT INTO `reservasi` (
+                                    `id_pelanggan`, `sumber`, `id_tipe`, `tanggal_checkin`, `tanggal_checkout`,
+                                    `jumlah_tamu`, `catatan`, `status`,
+                                    `harga_weekday_saat_pesan`, `harga_weekend_saat_pesan`, `harga_extrabed_saat_pesan`,
+                                    `estimasi_total`, `dibuat_pada`
+                                  ) VALUES (?, 'online', ?, ?, ?, ?, ?, 'menunggu', ?, ?, ?, ?, NOW())";
 
-            $stmtInsert = $pdo->prepare($sqlInsert);
-            $stmtInsert->execute([
-                current_user_id(),
-                $idTipe,
-                $checkin,
-                $checkout,
-                $jumlahTamu,
-                $catatan,
-                $rincian['tarif_weekday'],
-                $rincian['tarif_weekend'],
-                $rincian['tarif_extrabed'],
-                $rincian['estimasi_total']
-            ]);
+                    $stmtInsert = $pdo->prepare($sqlInsert);
+                    $stmtInsert->execute([
+                        current_user_id(),
+                        $idTipe,
+                        $checkin,
+                        $checkout,
+                        $jumlahTamu,
+                        $catatan,
+                        $rincian['tarif_weekday'],
+                        $rincian['tarif_weekend'],
+                        $rincian['tarif_extrabed'],
+                        $rincian['estimasi_total']
+                    ]);
 
-            $idReservasi = $pdo->lastInsertId();
+                    $idReservasi = $pdo->lastInsertId();
+                    $pdo->commit();
 
-            flash_set('success', t('booking.booking_success', ['kode' => "#RSV-{$idReservasi}"]));
-            redirect('reservasi-saya.php');
+                    flash_set('success', t('booking.booking_success', ['kode' => "#RSV-{$idReservasi}"]));
+                    redirect('reservasi-saya.php');
+                }
+            }
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $errors['umum'] = 'Terjadi kesalahan sistem saat memproses reservasi: ' . $e->getMessage();
         }
     }
 }
@@ -149,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $pageTitle = t('booking.title') . ' — Villa Joglo Masayu';
 $pageDesc  = t('booking.desc');
 $bodyClass = 'page-villa';
-$extraScripts = ['assets/js/reservasi.js'];
+$extraScripts = ['assets/js/kalender.js', 'assets/js/reservasi.js'];
 
 require_once __DIR__ . '/includes/layout/head.php';
 ?>
@@ -198,6 +208,9 @@ require_once __DIR__ . '/includes/layout/head.php';
             <div class="form-error"><?= e($errors['id_tipe']) ?></div>
           <?php endif; ?>
         </div>
+
+        <!-- Kalender Pemilihan Tanggal (Tahap 11) -->
+        <div id="reservasiCalendarBox" class="mb-5"></div>
 
         <div class="form-grid-2">
           <div class="form-group">

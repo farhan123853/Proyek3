@@ -1,12 +1,85 @@
 <?php
 /**
  * API: Cek Ketersediaan Tanggal & Hitung Tarif — Villa Joglo Masayu
- * Kebutuhan: F-06, F-07, F-08, F-16
+ * Kebutuhan: F-06, F-07, F-08, F-16, Tahap 11 (mode kalender)
+ *
+ * Mode Kalender (GET ?mode=kalender&tipe=N&dari=YYYY-MM-DD&sampai=YYYY-MM-DD):
+ *   - Publik (tanpa login), hanya GET, cache 30 detik.
+ *   - Respons hanya berisi status per tanggal — TANPA data pribadi tamu.
+ *   - Rate-limit 60 req/menit per sesi (sederhana, cukup untuk publik).
  */
 
 require_once __DIR__ . '/../includes/bootstrap.php';
 
 header('Content-Type: application/json; charset=UTF-8');
+
+// ─── MODE KALENDER ───────────────────────────────────────────────────────────
+if (($_GET['mode'] ?? '') === 'kalender') {
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['ok' => false, 'pesan' => 'Hanya GET yang diizinkan.']);
+        exit;
+    }
+
+    // Rate limiting per sesi (60 req / 60 detik)
+    $rlKey = 'rl_kalender';
+    $now   = time();
+    if (!isset($_SESSION[$rlKey])) {
+        $_SESSION[$rlKey] = ['count' => 0, 'window_start' => $now];
+    }
+    if ($now - $_SESSION[$rlKey]['window_start'] > 60) {
+        $_SESSION[$rlKey] = ['count' => 0, 'window_start' => $now];
+    }
+    $_SESSION[$rlKey]['count']++;
+    if ($_SESSION[$rlKey]['count'] > 60) {
+        http_response_code(429);
+        echo json_encode(['ok' => false, 'pesan' => 'Terlalu banyak permintaan. Coba lagi dalam satu menit.']);
+        exit;
+    }
+
+    // Cache pendek — dapat di-cache oleh browser/CDN 30 detik
+    header('Cache-Control: public, max-age=30');
+
+    $idTipe = (int)($_GET['tipe'] ?? 0);
+    $dari   = trim($_GET['dari'] ?? '');
+    $sampai = trim($_GET['sampai'] ?? '');
+
+    // Validasi parameter
+    if (!$idTipe || !$dari || !$sampai) {
+        json_response(['ok' => false, 'pesan' => 'Parameter tipe, dari, dan sampai wajib diisi.'], 400);
+    }
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dari) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $sampai)) {
+        json_response(['ok' => false, 'pesan' => 'Format tanggal harus YYYY-MM-DD.'], 400);
+    }
+    if ($sampai <= $dari) {
+        json_response(['ok' => false, 'pesan' => 'Tanggal sampai harus setelah tanggal dari.'], 400);
+    }
+    // Maksimal 400 hari
+    $diffDays = (strtotime($sampai) - strtotime($dari)) / 86400;
+    if ($diffDays > 400) {
+        json_response(['ok' => false, 'pesan' => 'Rentang tanggal maksimal 400 hari.'], 400);
+    }
+
+    $pdo = get_db();
+
+    // Pastikan tipe villa ada
+    $stmtTipe = $pdo->prepare("SELECT id_tipe FROM tipe_villa WHERE id_tipe = ? LIMIT 1");
+    $stmtTipe->execute([$idTipe]);
+    if (!$stmtTipe->fetch()) {
+        json_response(['ok' => false, 'pesan' => 'Tipe villa tidak ditemukan.'], 404);
+    }
+
+    $ketersediaan = hitung_ketersediaan($idTipe, $dari, $sampai, $pdo);
+
+    // Hanya status per tanggal — TANPA nama, id reservasi, kontak, atau data tamu
+    $data = [];
+    foreach ($ketersediaan['malam'] as $date => $info) {
+        $data[$date] = $info['status']; // 'tersedia' | 'menunggu' | 'penuh'
+    }
+
+    json_response(['ok' => true, 'unit_total' => $ketersediaan['unit_total'], 'data' => $data]);
+}
+// ─── END MODE KALENDER ───────────────────────────────────────────────────────
 
 $idTipe     = (int)($_REQUEST['id_tipe'] ?? 0);
 $checkin    = trim($_REQUEST['checkin'] ?? '');
@@ -65,25 +138,20 @@ if ($jumlahTamu < 1) {
     ], 422);
 }
 
-// 4. Periksa Ketersediaan Unit Berdasarkan Reservasi Berstatus "dikonfirmasi"
-// Rumus tumpang tindih: (checkin_baru < checkout_lama) AND (checkout_baru > checkin_lama)
-$sqlOverlap = "SELECT COUNT(*) as `total_terpesan` 
-               FROM `reservasi` 
-               WHERE `id_tipe` = :id_tipe 
-                 AND `status` = 'dikonfirmasi' 
-                 AND `tanggal_checkin` < :checkout 
-                 AND `tanggal_checkout` > :checkin";
+// 4. Periksa Ketersediaan menggunakan hitung_ketersediaan() — satu sumber kebenaran
+$ketersediaanLegacy = hitung_ketersediaan($idTipe, $checkin, $checkout, $pdo);
+$jumlahUnit = $ketersediaanLegacy['unit_total'];
 
-$stmtCheck = $pdo->prepare($sqlOverlap);
-$stmtCheck->execute([
-    'id_tipe'  => $idTipe,
-    'checkout' => $checkout,
-    'checkin'  => $checkin
-]);
-$overlap = (int)$stmtCheck->fetchColumn();
-$jumlahUnit = (int)$villa['jumlah_unit'];
-
-$tersedia = ($overlap < $jumlahUnit);
+// Ambil jumlah terpakai maksimum dalam rentang (untuk kompatibilitas respons lama)
+$overlap  = 0;
+$tersedia = true;
+foreach ($ketersediaanLegacy['malam'] as $malam) {
+    $terpakai = $malam['terkonfirmasi'] + $malam['diblokir'];
+    if ($terpakai > $overlap) $overlap = $terpakai;
+    if ($malam['status'] === 'penuh') {
+        $tersedia = false;
+    }
+}
 
 // 5. Hitung Rincian Tarif & Estimasi Nilai
 $rincian = hitung_rincian_tarif(

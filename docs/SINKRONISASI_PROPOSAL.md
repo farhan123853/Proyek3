@@ -83,3 +83,31 @@ Atas arahan dan persetujuan dosen pembimbing proyek, fitur prakiraan cuaca ekste
 11. **Kesimpulan**:
     - Menyesuaikan butir kesimpulan implementasi sistem dengan menyertakan keandalan modul pembayaran dan laporan pemasukan eksekutif.
 
+---
+
+## 5. Penyelarasan Kalender Ketersediaan, Reservasi Offline, dan Pemblokiran Tanggal (Tahap 11)
+
+### Bagian Proposal yang Direvisi:
+1. **Bab 1.2 (Identifikasi Masalah & Batasan Masalah Poin 4)**:
+   - Masalah pencatatan reservasi saluran ganda: selain reservasi daring oleh pelanggan terdaftar, villa juga sering menerima tamu langsung (*walk-in*), pemesanan via WhatsApp, dan panggilan telepon. Saluran offline ini kini dapat dicatat secara terpusat oleh staf Pengelola.
+2. **Perluasan Kebutuhan Fungsional F-08**:
+   - F-08 yang semula hanya memeriksa ketersediaan berdasarkan reservasi `dikonfirmasi` kini diperluas menjadi **fungsi ketersediaan terpadu `hitung_ketersediaan()`**:
+     $$\text{Unit Terpakai Malam } D = \text{Reservasi Terkonfirmasi} + \text{Blokir Tanggal Aktif}$$
+   - Reservasi `menunggu` berstatus sebagai peringatan ketersediaan dan tidak memblokir unit (sesuai aturan bisnis F-08 proposal awal).
+3. **Penambahan Kebutuhan Fungsional Baru**:
+   - **F-19**: Kalender Ketersediaan Tanggal Interaktif (dua bulan berdampingan di desktop, satu bulan di mobile, navigasi bulan, indikator pola aksesibel).
+   - **F-20**: Pencatatan Reservasi Offline (*walk-in*, WhatsApp, telepon) dengan validasi ketersediaan real-time dan opsi pencatatan tunai atomik.
+   - **F-21**: Pemblokiran Tanggal (*Date Blocking*) untuk pemeliharaan/perbaikan villa dan penggunaan pribadi pemilik.
+   - **F-22**: Kalender Hunian Staf (*Occupancy Calendar*) dengan visualisasi jadwal hunian bulanan per unit villa dan tampilan agenda pada perangkat mobile.
+4. **Pembaruan Diagram ERD dan Kamus Data (Tabel 3.3)**:
+   - Tabel `reservasi`: `id_pelanggan` diubah menjadi nullable; penambahan kolom `nama_tamu`, `kontak_tamu`, `sumber` (`online`, `walk_in`, `whatsapp`, `telepon`), dan `dibuat_oleh`.
+   - Tabel baru `blokir_tanggal`: `id_blokir`, `id_tipe`, `tanggal_mulai`, `tanggal_selesai`, `alasan`, `dibuat_oleh`, `dibuat_pada`, `dibatalkan_pada`.
+5. **Pembaruan Use Case Diagram**:
+   - Aktor Pengelola: Mengelola reservasi offline, memblokir tanggal kamar, dan melihat kalender hunian.
+   - Aktor Pemilik & Admin: Memantau kalender hunian dalam mode *Read-Only*.
+6. **Tabel Pengujian Sistem (Tabel 4.2)**:
+   - Penambahan skenario uji ketersediaan dan reservasi offline: **T-55 s.d. T-67**.
+7. **Keterbatasan Bisnis Sistem**:
+   - Permintaan reservasi berstatus `menunggu` tidak memblokir kalender ketersediaan; jika terjadi bentrok jadwal akibat konfirmasi reservasi lain, permintaan tersebut ditandai "Bentrok" di dashboard dan Pengelola menindaklanjutinya secara manual via WhatsApp.
+   - *TODO Master Data*: Jumlah unit aktual (`jumlah_unit`) per tipe villa saat ini bernilai default 1 unit sesuai data awal; perlu dikonfirmasi kembali dengan pemilik jika terdapat penambahan unit fisik di masa mendatang.
+

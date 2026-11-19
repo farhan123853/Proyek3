@@ -72,6 +72,29 @@ Pengelola bertanggung jawab menangani operasional penerimaan dan validasi keters
      - Sistem secara otomatis menjalankan transaksi basis data dengan kunci baris (`FOR UPDATE`) untuk memeriksa apakah masih ada unit villa yang tersisa pada rentang tanggal tersebut.
      - Jika unit masih ada, status berubah menjadi *dikonfirmasi* dan nama pengelola pencatat disimpan.
      - Jika unit telah habis karena telah dikonfirmasi sebelumnya, sistem otomatis membatalkan tindakan, mempertahankan status *menunggu*, dan menampilkan peringatan bahwa unit telah penuh.
+5. **Mencatat Reservasi Offline (Walk-in, WhatsApp, Telepon)**:
+   - Klik tombol **+ Reservasi Offline** pada header dashboard atau kalender hunian.
+   - Pilih sumber pemesanan (*Datang Langsung*, *WhatsApp*, atau *Telepon*).
+   - Masukkan nama tamu (2–100 karakter) dan nomor kontak aktif (9–15 digit).
+   - Tentukan tipe villa, tanggal check-in/out via kalender interaktif, dan jumlah tamu.
+   - Tersedia opsi **Catat pembayaran tunai sekarang** untuk langsung menerbitkan status lunas secara atomik.
+   - Klik **Simpan**: sistem memvalidasi ketersediaan unit dengan kunci baris mutex. Jika terdapat permintaan online menunggu pada tanggal yang sama, sistem memberikan peringatan konfirmasi terlebih dahulu.
+6. **Memblokir Tanggal Villa (Maintenance / Pribadi Pemilik)**:
+   - Klik tombol **Blokir Tanggal** di pojok kanan bawah dashboard.
+   - Pilih tipe villa, tanggal mulai (inklusif), tanggal selesai (eksklusif), dan alasan penutupan (misal: *Perawatan & Perbaikan Rutin* atau *Dipakai Pribadi oleh Pemilik*).
+   - Sistem menolak pemblokiran jika terdapat reservasi terkonfirmasi yang sedang berjalan pada tanggal tersebut.
+   - Pemblokiran yang aktif dapat dibatalkan sewaktu-waktu (*soft-cancel*) sehingga tanggal kembali terbuka.
+7. **Memantau Kalender Hunian (`kalender-hunian.php`)**:
+   - Klik menu **Kalender Hunian** pada header dashboard.
+   - Pada layar desktop/tablet ($\ge 640\text{ px}$), visualisasi jadwal tampil sebagai *timeline* per tipe villa dengan batang pembeda: Online (biru), Offline (ungu), Menunggu (pola garis kuning), dan Blokir (abu-abu silang).
+   - Pada ponsel ($< 640\text{ px}$), tampilan bertransformasi menjadi **Daftar Agenda Harian** vertikal tanpa *horizontal scroll*.
+   - Pengelola dapat melihat nama tamu dan mengakses tombol kontak WhatsApp secara langsung.
+8. **Membatalkan Reservasi Offline**:
+   - Reservasi offline yang **belum lunas** dapat dibatalkan melalui dashboard (wajib mencantumkan alasan, status berubah menjadi *dibatalkan*, dan tanggal otomatis terbuka kembali).
+   - Reservasi yang sudah berstatus lunas dilindungi dari pembatalan sepihak.
+9. **Menangani Permohonan Menunggu yang Bentrok**:
+   - Jika suatu tanggal telah habis terisi oleh reservasi lain, permohonan *menunggu* yang tersisa akan ditandai dengan lencana merah **⚠ Bentrok Jadwal**.
+   - Sistem menolak tombol persetujuan pada reservasi bentrok. Pengelola dapat menolaknya dan mengabari tamu melalui tombol template WhatsApp.
 
 ---
 

@@ -1487,6 +1487,9 @@ function renderVillaDetail() {
             <a href="reservasi.php?villa=${encodeURIComponent(villa.slug)}" class="btn btn-ghost" data-i18n="villa.book">${t('villa.book')}</a>
             <a href="${waUrl}${waAsk}" class="btn btn-ghost" target="_blank" rel="noopener" data-i18n="villa.ask">${t('villa.ask')}</a>
           </div>
+
+          <!-- Wadah Kalender Ketersediaan (Read-only Pengunjung) -->
+          <div id="villaCalendarContainer" class="mt-8"></div>
         </div>
 
       </div>
@@ -1509,6 +1512,18 @@ function renderVillaDetail() {
 
   initVillaPhotoInteractions(villa);
   observeNewReveal(container);
+
+  // Inisialisasi kalender ketersediaan mode read-only (Tahap 11)
+  if (typeof MasayuKalender === 'function') {
+    const slugMap = { 'joglo-wulung': 1, 'joglo-saren': 2, 'joglo-agung': 3 };
+    const idTipe = villa.id_tipe || slugMap[villa.slug] || 1;
+    new MasayuKalender('#villaCalendarContainer', {
+      mode: 'readonly',
+      idTipe: idTipe,
+      slugVilla: villa.slug,
+      lang: currentLang || window.MASAYU_LANG || 'id'
+    });
+  }
 }
 
 function renderVillaNotFound(container) {
