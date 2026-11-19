@@ -100,6 +100,15 @@ $orderId = 'MSY-' . $idReservasi . '-' . time();
 \Midtrans\Config::$is3ds = true;
 
 // Parameter Snap sesuai dokumentasi resmi
+$customerDetails = [
+    'first_name' => mb_substr($reservasi['nama_tamu'] ?: 'Tamu', 0, 50, 'UTF-8'),
+    'email'      => mb_substr($reservasi['email_tamu'] ?: '', 0, 50, 'UTF-8'),
+];
+$cleanPhone = preg_replace('/[^0-9+]/', '', (string)($reservasi['kontak_tamu'] ?? ''));
+if (!empty($cleanPhone)) {
+    $customerDetails['phone'] = mb_substr($cleanPhone, 0, 19, 'UTF-8');
+}
+
 $params = [
     'transaction_details' => [
         'order_id' => $orderId,
@@ -113,11 +122,7 @@ $params = [
             'name' => mb_substr('Sewa ' . $reservasi['nama_villa'], 0, 50, 'UTF-8'),
         ]
     ],
-    'customer_details' => [
-        'first_name' => $reservasi['nama_tamu'],
-        'email' => $reservasi['email_tamu'],
-        'phone' => $reservasi['kontak_tamu'],
-    ],
+    'customer_details' => $customerDetails,
     'expiry' => [
         'unit' => 'hour',
         'duration' => $batasJam,
@@ -132,9 +137,32 @@ $params = [
 try {
     $snapToken = \Midtrans\Snap::getSnapToken($params);
 } catch (Exception $e) {
-    // Sanitasi pesan log: pastikan tidak ada kebocoran Server Key
-    $errMsg = preg_replace('/(SB-Mid-server-[a-zA-Z0-9_\-]+|Mid-server-[a-zA-Z0-9_\-]+)/', '***REDACTED***', $e->getMessage());
-    error_log("Midtrans Snap Error: " . $errMsg);
+    $rawMsg = $e->getMessage();
+    $code = $e->getCode();
+
+    // Sanitasi pesan error: pastikan tidak ada kebocoran Server Key maupun Client Key ke log server
+    $cleanMsg = preg_replace('/(SB-Mid-[a-zA-Z0-9_\-]+|Mid-server-[a-zA-Z0-9_\-]+|Mid-client-[a-zA-Z0-9_\-]+)/', '***REDACTED***', $rawMsg);
+
+    // Kategori diagnosa untuk mempermudah pelacakan tanpa mengekspos rahasia
+    $diagnosa = 'Kesalahan API Midtrans';
+    if ($code === 401 || strpos($rawMsg, '401') !== false) {
+        $diagnosa = 'Autentikasi Gagal (401 Unauthorized) - Server Key di config/config.php tidak valid atau belum diganti dengan kunci Sandbox/Production resmi Midtrans';
+    } elseif ($code === 400 || strpos($rawMsg, '400') !== false) {
+        $diagnosa = 'Validasi Parameter Gagal (400 Bad Request) - Periksa skema customer_details, item_details, atau gross_amount';
+    } elseif (stripos($rawMsg, 'ssl') !== false || stripos($rawMsg, 'certificate') !== false) {
+        $diagnosa = 'Koneksi SSL Gagal - Periksa sertifikat CA cURL di php.ini (curl.cainfo)';
+    }
+
+    error_log(sprintf(
+        "[Midtrans Snap Error] OrderID: %s | ID Reservasi: %d | Nominal: %d | Code: %s | Diagnosa: %s | Detail: %s",
+        $orderId,
+        $idReservasi,
+        $nominal,
+        $code ?: 'N/A',
+        $diagnosa,
+        $cleanMsg
+    ));
+
     json_response(['ok' => false, 'pesan' => t('payment.snap_error')], 502);
 }
 

@@ -337,8 +337,13 @@ require_once __DIR__ . '/includes/layout/head.php';
 </main>
 
 <?php if ($needSnapJs): ?>
-  <!-- Script Midtrans Snap Sandbox sesuai dokumentasi resmi -->
-  <script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="<?= e($config['MIDTRANS_CLIENT_KEY'] ?? '') ?>"></script>
+  <?php
+  $snapJsUrl = (!empty($config['MIDTRANS_IS_PRODUCTION']))
+      ? 'https://app.midtrans.com/snap/snap.js'
+      : 'https://app.sandbox.midtrans.com/snap/snap.js';
+  ?>
+  <!-- Script Midtrans Snap (Sandbox / Production) sesuai dokumentasi resmi -->
+  <script src="<?= $snapJsUrl ?>" data-client-key="<?= e($config['MIDTRANS_CLIENT_KEY'] ?? '') ?>"></script>
 
   <script>
   document.addEventListener('DOMContentLoaded', function() {
