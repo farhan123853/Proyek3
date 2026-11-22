@@ -11,11 +11,16 @@ CREATE TABLE IF NOT EXISTS `pengguna` (
   `id_pengguna` INT AUTO_INCREMENT PRIMARY KEY,
   `nama` VARCHAR(100) NOT NULL,
   `email` VARCHAR(100) NOT NULL UNIQUE,
+  `google_id` VARCHAR(255)
+    CHARACTER SET ascii
+    COLLATE ascii_bin
+    NULL DEFAULT NULL,
   `kontak` VARCHAR(30) NOT NULL,
   `password_hash` VARCHAR(255) NOT NULL,
   `peran` ENUM('pelanggan', 'pengelola', 'pemilik', 'admin') NOT NULL DEFAULT 'pelanggan',
   `status_akun` ENUM('aktif', 'nonaktif') NOT NULL DEFAULT 'aktif',
-  `dibuat_pada` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  `dibuat_pada` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uq_pengguna_google_id` (`google_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 2. Tabel Tipe Villa (Data diselaraskan dengan script.js)

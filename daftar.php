@@ -156,6 +156,8 @@ require_once __DIR__ . '/includes/layout/head.php';
         </div>
       </form>
 
+      <?php require __DIR__ . '/includes/google_signin_button.php'; ?>
+
       <div style="margin-top: 1.5rem; text-align: center; font-size: 14px; color: var(--wood);">
         <?= t('auth.have_account') ?> <a href="login.php" style="color: var(--gold-dark); font-weight: 700; text-decoration: underline;"><?= t('auth.login_link') ?></a>
       </div>

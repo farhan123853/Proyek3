@@ -1,0 +1,7 @@
+{
+    "require": {
+        "google/apiclient": "^2.20"
+    },
+    "name": "villa-joglo-masayu/app",
+    "description": "Website informasi dan reservasi Villa Joglo Masayu berbasis PHP Native."
+}

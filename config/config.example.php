@@ -31,4 +31,7 @@ return [
     // External Email Verification API
     'EMAIL_API_URL'    => '',
     'EMAIL_API_SECRET' => '',
+
+    // Google Sign-In
+    'GOOGLE_CLIENT_ID' => '',
 ];
