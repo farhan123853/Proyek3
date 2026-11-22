@@ -490,6 +490,9 @@ function injectHeader() {
     pelanggan: 'Pelanggan'
   };
   const roleName = roleLabels[auth.peran] || 'Pengguna';
+  const settingsLabel = currentLang === 'en'
+  ? 'Account Settings'
+  : 'Pengaturan Akun';
   const initial = (auth.nama || 'A').trim().charAt(0).toUpperCase();
 
   let targetUrl = 'reservasi-saya.php';
@@ -553,6 +556,28 @@ function injectHeader() {
             </svg>
             <span>${targetLabel}</span>
           </a>
+          ${auth.peran === 'pelanggan' ? `
+            <a href="pengaturan-akun.php"
+              role="menuitem"
+              class="user-dropdown-item"
+              id="userMenuSettings"
+              tabindex="-1">
+
+              <svg width="16" height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.5 1.5-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-2.1v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1-1.5-1.5.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H7.4v-2.1h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.5-1.5.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.2h2.1v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.5 1.5-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2v2.1h-.2a1.7 1.7 0 0 0-1.5 1z"></path>
+              </svg>
+
+              <span>${settingsLabel}</span>
+            </a>
+          ` : ''}
           <div class="user-dropdown-divider" role="separator"></div>
           <form method="post" action="logout.php" class="user-dropdown-form">
             <input type="hidden" name="csrf_token" value="${auth.csrf || ''}">
@@ -633,6 +658,12 @@ function injectHeader() {
                 </svg>
                 <span>${targetLabel}</span>
               </a>
+              ${auth.peran === 'pelanggan' ? `
+                <a href="pengaturan-akun.php"
+                  class="mobile-nav-link mobile-nav-dashboard-link">
+                  <span>${settingsLabel}</span>
+                </a>
+              ` : ''}
             </div>
           `}
         </div>

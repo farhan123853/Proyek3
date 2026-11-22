@@ -82,6 +82,8 @@ require_once __DIR__ . '/includes/layout/head.php';
         </div>
       </form>
 
+      <?php require __DIR__ . '/includes/google_signin_button.php'; ?>
+
       <div style="margin-top: 1.5rem; text-align: center; font-size: 14px; color: var(--wood);">
         <?= t('auth.no_account') ?> <a href="daftar.php" style="color: var(--gold-dark); font-weight: 700; text-decoration: underline;"><?= t('auth.register_link') ?></a>
       </div>

@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
     "name": "villa-joglo-masayu/website",
     "description": "Website Resmi dan Sistem Reservasi Villa Joglo Masayu",
     "type": "project",
@@ -7,4 +8,11 @@
         "php": ">=8.0",
         "midtrans/midtrans-php": "^2.6"
     }
+=======
+    "require": {
+        "google/apiclient": "^2.20"
+    },
+    "name": "villa-joglo-masayu/app",
+    "description": "Website informasi dan reservasi Villa Joglo Masayu berbasis PHP Native."
+>>>>>>> d0e64308e520a2971788d8d98821e24f2f26a8c0
 }

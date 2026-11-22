@@ -71,4 +71,11 @@ desktop.ini
 *.swo
 *~
 .vscode/
+<<<<<<< HEAD
 .idea/
+=======
+.idea/
+
+# Composer dependencies
+/vendor/
+>>>>>>> d0e64308e520a2971788d8d98821e24f2f26a8c0

@@ -461,3 +461,83 @@
     align-items: stretch;
   }
 }
+
+
+/* ============================================================
+   EMAIL VERIFICATION BANNER
+   Villa Joglo Masayu
+   ============================================================ */
+
+.email-verification-banner {
+  position: fixed;
+  top: var(--header-h-scrolled);
+  left: 0;
+  right: 0;
+  z-index: 880;
+  min-height: 48px;
+  background: #FFF8E8;
+  border-bottom: 1px solid rgba(184, 132, 0, 0.35);
+  color: var(--teak);
+  box-shadow: 0 3px 10px rgba(59, 36, 22, 0.05);
+}
+
+.email-verification-banner__inner {
+  max-width: var(--max-w);
+  min-height: 48px;
+  margin: 0 auto;
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 13px;
+}
+
+.email-verification-banner__detail {
+  color: var(--wood);
+  flex: 1;
+}
+
+.email-verification-banner__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 7px 13px;
+  background: var(--gold);
+  border: 1px solid var(--gold);
+  color: var(--teak);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: background 0.2s ease;
+}
+
+.email-verification-banner__action:hover {
+  background: var(--gold-dark);
+  border-color: var(--gold-dark);
+  color: #fffaf0;
+}
+
+@media (max-width: 600px) {
+  .email-verification-banner,
+  .email-verification-banner__inner {
+    min-height: 44px;
+  }
+
+  .email-verification-banner__inner {
+    gap: 0.5rem;
+    padding-inline: 1rem;
+    font-size: 11px;
+  }
+
+  .email-verification-banner__detail {
+    display: none;
+  }
+
+  .email-verification-banner__action {
+    padding: 6px 9px;
+    font-size: 10px;
+  }
+}

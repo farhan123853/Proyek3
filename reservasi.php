@@ -9,6 +9,19 @@ require_once __DIR__ . '/includes/bootstrap.php';
 // F-06: Wajib login untuk melakukan reservasi
 require_login('login.php');
 
+// Pelanggan wajib memverifikasi email sebelum membuat reservasi.
+if (
+    current_role() === 'pelanggan'
+    && !email_verification_is_complete((int) current_user_id())
+) {
+    flash_set(
+        'warning',
+        'Verifikasi alamat email terlebih dahulu sebelum membuat reservasi.'
+    );
+
+    redirect('pengaturan-akun.php');
+}
+
 $pdo = get_db();
 
 // Ambil daftar tipe villa untuk dropdown

@@ -28,4 +28,11 @@ return [
     'APP_NAME'   => 'Villa Joglo Masayu',
     'APP_URL'    => 'http://localhost:8000',
     'APP_DEBUG'  => true,
+
+    // External Email Verification API
+    'EMAIL_API_URL'    => '',
+    'EMAIL_API_SECRET' => '',
+
+    // Google Sign-In
+    'GOOGLE_CLIENT_ID' => '',
 ];
