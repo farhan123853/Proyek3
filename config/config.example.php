@@ -17,8 +17,8 @@ return [
     // ── Midtrans Payment Gateway (Mode Sandbox) ──────────────
     // Kunci sandbox diperoleh dari Dashboard Midtrans (Settings > Access Keys)
     // Server Key HANYA disimpan di server (jangan bocorkan ke repo atau JavaScript)
-    'MIDTRANS_SERVER_KEY'    => 'YOUR_MIDTRANS_SERVER_KEY',
-    'MIDTRANS_CLIENT_KEY'    => 'YOUR_MIDTRANS_CLIENT_KEY',
+    'MIDTRANS_SERVER_KEY'    => 'SB-Mid-server-ISI_DI_SINI',
+    'MIDTRANS_CLIENT_KEY'    => 'SB-Mid-client-ISI_DI_SINI',
     'MIDTRANS_IS_PRODUCTION' => false,
     'PEMBAYARAN_BATAS_JAM'   => 24,
 

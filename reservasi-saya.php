@@ -338,12 +338,33 @@ require_once __DIR__ . '/includes/layout/head.php';
 
 <?php if ($needSnapJs): ?>
   <?php
-  $snapJsUrl = (!empty($config['MIDTRANS_IS_PRODUCTION']))
-      ? 'https://app.midtrans.com/snap/snap.js'
-      : 'https://app.sandbox.midtrans.com/snap/snap.js';
+  $kunciStatus = midtrans_kunci_siap();
+  if (!$kunciStatus['client_siap']):
+    catat_midtrans_log('CONFIG_WARNING', 'reservasi-saya.php', 'Client Key belum dikonfigurasi: ' . $kunciStatus['client_alasan']);
   ?>
-  <!-- Script Midtrans Snap (Sandbox / Production) sesuai dokumentasi resmi -->
-  <script src="<?= $snapJsUrl ?>" data-client-key="<?= e($config['MIDTRANS_CLIENT_KEY'] ?? '') ?>"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof showToast === 'function') {
+        showToast(<?= json_encode(t('payment.not_configured')) ?>, 'error');
+      }
+      document.querySelectorAll('.btn-pay-snap').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          if (typeof showToast === 'function') {
+            showToast(<?= json_encode(t('payment.not_configured')) ?>, 'error');
+          }
+        });
+      });
+    });
+    </script>
+  <?php else: ?>
+    <?php
+    $snapJsUrl = (!empty($config['MIDTRANS_IS_PRODUCTION']))
+        ? 'https://app.midtrans.com/snap/snap.js'
+        : 'https://app.sandbox.midtrans.com/snap/snap.js';
+    ?>
+    <!-- Script Midtrans Snap (Sandbox / Production) sesuai dokumentasi resmi -->
+    <script src="<?= $snapJsUrl ?>" data-client-key="<?= e($config['MIDTRANS_CLIENT_KEY'] ?? '') ?>"></script>
 
   <script>
   document.addEventListener('DOMContentLoaded', function() {
@@ -487,6 +508,7 @@ require_once __DIR__ . '/includes/layout/head.php';
     });
   });
   </script>
+  <?php endif; ?>
 <?php endif; ?>
 
 <?php require_once __DIR__ . '/includes/layout/foot.php'; ?>

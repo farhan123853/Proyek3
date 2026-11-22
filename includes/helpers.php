@@ -785,3 +785,102 @@ function hitung_ketersediaan(int $id_tipe, string $dari, string $sampai, ?PDO $d
 
     return ['unit_total' => $unitTotal, 'malam' => $result];
 }
+
+/**
+ * Pencatatan log khusus Midtrans ke tmp/midtrans-error.log
+ * Menyensor kunci sensitif sebelum menulis ke file.
+ */
+function catat_midtrans_log(string $kategori, string $lokasi, string $pesan, ?string $exceptionClass = null): void {
+    $dir = defined('ROOT_PATH') ? ROOT_PATH . 'tmp' : __DIR__ . '/../tmp';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0755, true);
+    }
+    $logFile = $dir . DIRECTORY_SEPARATOR . 'midtrans-error.log';
+
+    // Sensor nilai kunci jika sempat muncul dalam pesan
+    $cleanPesan = preg_replace('/(SB-Mid-[a-zA-Z0-9_\-]+|Mid-server-[a-zA-Z0-9_\-]+|Mid-client-[a-zA-Z0-9_\-]+)/', '***REDACTED***', $pesan);
+
+    $waktu = date('Y-m-d H:i:s');
+    $exPart = $exceptionClass ? " [Exception: {$exceptionClass}]" : "";
+    $entry = sprintf("[%s] [%s] [%s]%s %s\n", $waktu, $kategori, $lokasi, $exPart, $cleanPesan);
+
+    @file_put_contents($logFile, $entry, FILE_APPEND | LOCK_EX);
+}
+
+/**
+ * Validasi kesiapan Server Key & Client Key Midtrans
+ * Mengembalikan status terperinci (apakah kosong, placeholder, atau awalan tidak dikenal).
+ * JANGAN menolak kunci jika format awalan berbeda dari standar; cukup beri peringatan.
+ */
+function midtrans_kunci_siap(): array {
+    global $config;
+    $serverKey = trim((string)($config['MIDTRANS_SERVER_KEY'] ?? (defined('MIDTRANS_SERVER_KEY') ? MIDTRANS_SERVER_KEY : '')));
+    $clientKey = trim((string)($config['MIDTRANS_CLIENT_KEY'] ?? (defined('MIDTRANS_CLIENT_KEY') ? MIDTRANS_CLIENT_KEY : '')));
+    $isProduction = (bool)($config['MIDTRANS_IS_PRODUCTION'] ?? (defined('MIDTRANS_IS_PRODUCTION') ? MIDTRANS_IS_PRODUCTION : false));
+
+    $placeholders = ['YOUR_MIDTRANS', 'ISI_DI_SINI', 'DUMMY', 'CHANGE_ME', 'EXAMPLE', 'PLACEHOLDER'];
+
+    $serverSiap = true;
+    $serverAlasan = '';
+    $serverPeringatan = '';
+
+    if ($serverKey === '') {
+        $serverSiap = false;
+        $serverAlasan = 'Server Key Midtrans kosong.';
+    } else {
+        foreach ($placeholders as $ph) {
+            if (stripos($serverKey, $ph) !== false) {
+                $serverSiap = false;
+                $serverAlasan = 'Server Key Midtrans masih menggunakan nilai placeholder.';
+                break;
+            }
+        }
+        if ($serverSiap) {
+            // Awalan tak dikenal: peringatan saja, BUKAN penolakan
+            $expectedPrefix = $isProduction ? 'Mid-server-' : 'SB-Mid-server-';
+            if (strpos($serverKey, $expectedPrefix) !== 0) {
+                $serverPeringatan = "Awalan Server Key tidak biasa (standar: '$expectedPrefix').";
+            }
+        }
+    }
+
+    $clientSiap = true;
+    $clientAlasan = '';
+    $clientPeringatan = '';
+
+    if ($clientKey === '') {
+        $clientSiap = false;
+        $clientAlasan = 'Client Key Midtrans kosong.';
+    } else {
+        foreach ($placeholders as $ph) {
+            if (stripos($clientKey, $ph) !== false) {
+                $clientSiap = false;
+                $clientAlasan = 'Client Key Midtrans masih menggunakan nilai placeholder.';
+                break;
+            }
+        }
+        if ($clientSiap) {
+            $expectedPrefix = $isProduction ? 'Mid-client-' : 'SB-Mid-client-';
+            if (strpos($clientKey, $expectedPrefix) !== 0) {
+                $clientPeringatan = "Awalan Client Key tidak biasa (standar: '$expectedPrefix').";
+            }
+        }
+    }
+
+    $siap = $serverSiap && $clientSiap;
+
+    return [
+        'siap'              => $siap,
+        'server_siap'       => $serverSiap,
+        'client_siap'       => $clientSiap,
+        'server_alasan'     => $serverAlasan,
+        'client_alasan'     => $clientAlasan,
+        'server_peringatan' => $serverPeringatan,
+        'client_peringatan' => $clientPeringatan,
+        'server_len'        => strlen($serverKey),
+        'client_len'        => strlen($clientKey),
+        'server_prefix'     => substr($serverKey, 0, 14),
+        'client_prefix'     => substr($clientKey, 0, 14),
+        'is_production'     => $isProduction,
+    ];
+}

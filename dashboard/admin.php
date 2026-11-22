@@ -192,10 +192,10 @@ $transaksiList = $stmtTrx->fetchAll();
 $stmtAllUsers = $pdo->query("SELECT * FROM `pengguna` ORDER BY `id_pengguna` ASC");
 $usersList = $stmtAllUsers->fetchAll();
 
-// Cek Konfigurasi Server Key Midtrans
-$serverKey = trim($config['MIDTRANS_SERVER_KEY'] ?? '');
-$isKeyEmpty = empty($serverKey) || strpos($serverKey, 'placeholder') !== false || strpos($serverKey, 'ganti_dengan') !== false;
-$isProduction = (bool)($config['MIDTRANS_IS_PRODUCTION'] ?? false);
+// Cek Konfigurasi Server Key & Client Key Midtrans
+$kunciMidtrans = midtrans_kunci_siap();
+$isKeyEmpty = !$kunciMidtrans['siap'];
+$isProduction = $kunciMidtrans['is_production'];
 
 $pageTitle = t('dashboard.admin_title') . ' — Villa Joglo Masayu';
 $pageDesc  = 'Manajemen akun staf internal, pengawasan transaksi pembayaran, dan audit sistem.';
@@ -230,13 +230,19 @@ require_once __DIR__ . '/../includes/layout/head.php';
     </div>
   </div>
 
-  <!-- Peringatan Bila Server Key Belum Diisi -->
+  <!-- Peringatan Bila Kunci Midtrans Belum Lengkap -->
   <?php if ($isKeyEmpty): ?>
     <div class="mb-6 p-4 bg-rose-50 border border-rose-300 rounded-xl text-xs text-rose-900 flex items-start gap-3 shadow-sm" role="alert">
       <svg class="w-5 h-5 text-rose-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
       <div>
-        <strong class="font-bold block mb-0.5"><?= t('admin.warning_no_server_key') ?></strong>
+        <strong class="font-bold block mb-0.5"><?= t('admin.warning_keys_incomplete') ?>: <?= t('admin.warning_no_server_key') ?></strong>
         <span>Pastikan konstanta <code>MIDTRANS_SERVER_KEY</code> dan <code>MIDTRANS_CLIENT_KEY</code> telah diisi dengan nilai yang valid pada berkas <code>config.php</code>.</span>
+        <?php if (!$kunciMidtrans['server_siap']): ?>
+          <p class="mt-1 mb-0 text-rose-700">· Server Key: <?= e($kunciMidtrans['server_alasan']) ?></p>
+        <?php endif; ?>
+        <?php if (!$kunciMidtrans['client_siap']): ?>
+          <p class="mt-0.5 mb-0 text-rose-700">· Client Key: <?= e($kunciMidtrans['client_alasan']) ?></p>
+        <?php endif; ?>
       </div>
     </div>
   <?php endif; ?>

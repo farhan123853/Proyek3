@@ -34,6 +34,17 @@ if (!file_exists($configFile)) {
 }
 $config = file_exists($configFile) ? require $configFile : [];
 
+// 3b. Definisikan konstanta Midtrans jika belum didefinisikan
+if (!defined('MIDTRANS_SERVER_KEY')) {
+    define('MIDTRANS_SERVER_KEY', (string)($config['MIDTRANS_SERVER_KEY'] ?? ''));
+}
+if (!defined('MIDTRANS_CLIENT_KEY')) {
+    define('MIDTRANS_CLIENT_KEY', (string)($config['MIDTRANS_CLIENT_KEY'] ?? ''));
+}
+if (!defined('MIDTRANS_IS_PRODUCTION')) {
+    define('MIDTRANS_IS_PRODUCTION', (bool)($config['MIDTRANS_IS_PRODUCTION'] ?? false));
+}
+
 // 4. Tentukan BASE_URL untuk <base href="...">
 if (!defined('BASE_URL')) {
     $appUrl = $config['APP_URL'] ?? 'http://localhost:8000';

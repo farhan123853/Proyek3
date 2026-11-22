@@ -94,8 +94,14 @@ if ($existing && !empty($existing['snap_token'])) {
 $orderId = 'MSY-' . $idReservasi . '-' . time();
 
 // 9. Konfigurasi Midtrans SDK
-\Midtrans\Config::$serverKey = $config['MIDTRANS_SERVER_KEY'] ?? '';
-\Midtrans\Config::$isProduction = (bool)($config['MIDTRANS_IS_PRODUCTION'] ?? false);
+$statusKunci = midtrans_kunci_siap();
+if (!$statusKunci['server_siap']) {
+    catat_midtrans_log('CONFIG_ERROR', 'api/buat-pembayaran.php', "Server Key belum siap: " . $statusKunci['server_alasan']);
+    json_response(['ok' => false, 'pesan' => t('payment.snap_error')], 502);
+}
+
+\Midtrans\Config::$serverKey = $config['MIDTRANS_SERVER_KEY'] ?? (defined('MIDTRANS_SERVER_KEY') ? MIDTRANS_SERVER_KEY : '');
+\Midtrans\Config::$isProduction = (bool)($config['MIDTRANS_IS_PRODUCTION'] ?? (defined('MIDTRANS_IS_PRODUCTION') ? MIDTRANS_IS_PRODUCTION : false));
 \Midtrans\Config::$isSanitized = true;
 \Midtrans\Config::$is3ds = true;
 
@@ -139,6 +145,7 @@ try {
 } catch (Exception $e) {
     $rawMsg = $e->getMessage();
     $code = $e->getCode();
+    $exClass = get_class($e);
 
     // Sanitasi pesan error: pastikan tidak ada kebocoran Server Key maupun Client Key ke log server
     $cleanMsg = preg_replace('/(SB-Mid-[a-zA-Z0-9_\-]+|Mid-server-[a-zA-Z0-9_\-]+|Mid-client-[a-zA-Z0-9_\-]+)/', '***REDACTED***', $rawMsg);
@@ -153,15 +160,19 @@ try {
         $diagnosa = 'Koneksi SSL Gagal - Periksa sertifikat CA cURL di php.ini (curl.cainfo)';
     }
 
-    error_log(sprintf(
-        "[Midtrans Snap Error] OrderID: %s | ID Reservasi: %d | Nominal: %d | Code: %s | Diagnosa: %s | Detail: %s",
+    $logDetail = sprintf(
+        "OrderID: %s | ID Reservasi: %d | Nominal: %d | Code: %s | Diagnosa: %s | Detail: %s",
         $orderId,
         $idReservasi,
         $nominal,
         $code ?: 'N/A',
         $diagnosa,
         $cleanMsg
-    ));
+    );
+
+    // Tulis ke tmp/midtrans-error.log
+    catat_midtrans_log('SNAP_ERROR', 'api/buat-pembayaran.php', $logDetail, $exClass);
+    error_log("[Midtrans Snap Error] " . $logDetail);
 
     json_response(['ok' => false, 'pesan' => t('payment.snap_error')], 502);
 }
