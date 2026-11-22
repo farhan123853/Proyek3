@@ -10,6 +10,7 @@ Basis data dirancang menggunakan **MySQL / MariaDB** dengan engine **InnoDB** da
 erDiagram
     PENGGUNA ||--o{ RESERVASI : "membuat (id_pelanggan)"
     PENGGUNA ||--o{ RESERVASI : "memproses (diproses_oleh)"
+    PENGGUNA ||--o{ EMAIL_VERIFICATION_TOKENS : "memiliki token verifikasi"
     TIPE_VILLA ||--o{ RESERVASI : "dipesan (id_tipe)"
     RESERVASI ||--o{ PEMBAYARAN : "memiliki (id_reservasi)"
     PENGGUNA ||--o{ PEMBAYARAN : "mencatat tunai (dicatat_oleh)"
@@ -23,7 +24,17 @@ erDiagram
         varchar password_hash
         enum peran "pelanggan, pengelola, pemilik, admin"
         enum status_akun "aktif, nonaktif"
+        datetime email_verified_at
         datetime dibuat_pada
+    }
+
+    EMAIL_VERIFICATION_TOKENS {
+        bigint id PK
+        int id_pengguna FK
+        char token_hash UK
+        datetime expires_at
+        datetime used_at
+        datetime created_at
     }
 
     TIPE_VILLA {
@@ -109,6 +120,7 @@ Menyimpan seluruh data identitas dan akun sistem (Pelanggan, Pengelola, Pemilik,
 | `password_hash` | `VARCHAR(255)` | No | Hash kata sandi (`PASSWORD_DEFAULT` / Bcrypt) |
 | `peran` | `ENUM` | No | `'pelanggan'`, `'pengelola'`, `'pemilik'`, `'admin'` |
 | `status_akun` | `ENUM` | No | `'aktif'`, `'nonaktif'` (akun nonaktif ditolak saat login) |
+| `email_verified_at` | `DATETIME` | Yes | Waktu verifikasi email; `NULL` jika belum diverifikasi |
 | `dibuat_pada` | `DATETIME` | No | Waktu pembuatan akun (default: `CURRENT_TIMESTAMP`) |
 
 ---
@@ -196,6 +208,22 @@ Menyimpan riwayat percobaan transaksi pembayaran online (Midtrans Snap) dan penc
 | `dibuat_pada` | `DATETIME` | No | Waktu pembuatan order pembayaran (WIB) |
 | `dibayar_pada` | `DATETIME` | Yes | Waktu aktual penyelesaian pembayaran / settlement (WIB) |
 | `lunas_key` | `INT` (Generated) | Yes | Stored Generated: `IF(status='lunas', id_reservasi, NULL)`, UNIQUE INDEX |
+
+---
+
+### Tabel 6: `email_verification_tokens`
+Menyimpan hash token verifikasi email pelanggan. Token asli hanya dikirim melalui tautan email; token yang tersimpan memiliki masa berlaku dan dapat ditandai sudah digunakan.
+
+| Nama Kolom | Tipe Data | Nullable | Keterangan |
+|---|---|---|---|
+| `id` | `BIGINT UNSIGNED` | No | Primary Key, Auto Increment |
+| `id_pengguna` | `INT` | No | FK ke `pengguna.id_pengguna`; token dihapus bersama akun |
+| `token_hash` | `CHAR(64)` | No | Hash SHA-256 token, UNIQUE |
+| `expires_at` | `DATETIME` | No | Batas waktu berlakunya token |
+| `used_at` | `DATETIME` | Yes | Waktu token digunakan atau dibatalkan |
+| `created_at` | `DATETIME` | No | Waktu token dibuat |
+
+Kolom `pengguna.email_verified_at` menyimpan waktu verifikasi. Nilai `NULL` berarti email pelanggan belum terverifikasi.
 
 ---
 

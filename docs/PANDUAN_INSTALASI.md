@@ -33,7 +33,7 @@ CREATE DATABASE IF NOT EXISTS `villa_joglo_masayu`
 
 ### Langkah 3: Impor Skema dan Data Awal (Seed)
 Impor kedua berkas SQL yang tersedia di folder `database/`:
-1. `database/schema.sql` (struktur tabel `pengguna`, `tipe_villa`, dan `reservasi`).
+1. `database/schema.sql` (struktur seluruh tabel, termasuk tabel token verifikasi email).
 2. `database/seed.sql` (data awal tipe villa, akun pengujian, dan contoh reservasi).
 
 Jika menggunakan terminal:
@@ -42,6 +42,14 @@ cd C:\xampp\htdocs\website
 mysql -u root -p villa_joglo_masayu < database/schema.sql
 mysql -u root -p villa_joglo_masayu < database/seed.sql
 ```
+
+Jika database sudah dipakai sebelum fitur-fitur terbaru ditambahkan, **jangan impor ulang `schema.sql` atau `seed.sql`**. Cadangkan database terlebih dahulu, lalu pilih database `villa_joglo_masayu` di phpMyAdmin dan jalankan hanya migrasi yang belum diterapkan:
+
+1. `database/migrations/003_pembayaran.sql` — membuat tabel `pembayaran`.
+2. `database/migrations/004_reservasi_offline.sql` — menambahkan kolom reservasi offline dan tabel `blokir_tanggal`. Sebelum menjalankan, periksa `SHOW COLUMNS FROM reservasi;`. Jika kolom `nama_tamu`, `kontak_tamu`, `sumber`, atau `dibuat_oleh` sudah ada, jangan jalankan migrasi ini apa adanya; skema mungkin sudah termigrasi sebagian.
+3. `database/migrations/add_email_verification.sql` — menambahkan status verifikasi email dan tabel token. Jalankan hanya jika kolom `pengguna.email_verified_at` dan tabel `email_verification_tokens` belum ada.
+
+Urutan migrasi di atas berlaku untuk database lama yang belum menerapkan migrasi tersebut. Jangan jalankan ulang migrasi yang sudah berhasil diterapkan.
 
 ### Langkah 4: Pasang Ketergantungan Pustaka (Composer)
 Jalankan Composer untuk memasang dependensi resmi Midtrans PHP SDK:

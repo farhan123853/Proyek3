@@ -7,6 +7,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 TRUNCATE TABLE `reservasi`;
 TRUNCATE TABLE `tipe_villa`;
+TRUNCATE TABLE `email_verification_tokens`;
 TRUNCATE TABLE `pengguna`;
 
 -- 1. Pengguna Awal
@@ -15,12 +16,12 @@ TRUNCATE TABLE `pengguna`;
 -- pengelola@joglomasayu.com : Pengelola2026!
 -- pemilik@joglomasayu.com   : Pemilik2026!
 -- budi@gmail.com            : Pelanggan2026!
-INSERT INTO `pengguna` (`id_pengguna`, `nama`, `email`, `kontak`, `password_hash`, `peran`, `status_akun`, `dibuat_pada`) VALUES
-(1, 'Admin Sistem', 'admin@joglomasayu.com', '081234567890', '$2y$12$qC68lXtawlKlc0qVVSttX.VPwEnqEtT16NgoI.GjE/UCFQOJnikU2', 'admin', 'aktif', NOW()),
-(2, 'Pengelola Masayu', 'pengelola@joglomasayu.com', '081234567891', '$2y$12$i4apORqa1QG5MdvdpyFYreKTFUxnw4rK43Q2UWMEnStrQRJWPPO5a', 'pengelola', 'aktif', NOW()),
-(3, 'Pemilik Villa', 'pemilik@joglomasayu.com', '081234567892', '$2y$12$gzNoLXliHUELuq.5S1eX..6cCKou71niVUIBMMSDCsT9wA1s1hyim', 'pemilik', 'aktif', NOW()),
-(4, 'Budi Santoso', 'budi@gmail.com', '081298765432', '$2y$12$RjL5bxSO0XERmXe4Q5NJVeIaO8USqNio2JCm7jcp9BpWU0SlCLnuy', 'pelanggan', 'aktif', NOW()),
-(5, 'Siti Rahma', 'siti@gmail.com', '081211223344', '$2y$12$RjL5bxSO0XERmXe4Q5NJVeIaO8USqNio2JCm7jcp9BpWU0SlCLnuy', 'pelanggan', 'aktif', NOW());
+INSERT INTO `pengguna` (`id_pengguna`, `nama`, `email`, `kontak`, `password_hash`, `peran`, `status_akun`, `email_verified_at`, `dibuat_pada`) VALUES
+(1, 'Admin Sistem', 'admin@joglomasayu.com', '081234567890', '$2y$12$qC68lXtawlKlc0qVVSttX.VPwEnqEtT16NgoI.GjE/UCFQOJnikU2', 'admin', 'aktif', NOW(), NOW()),
+(2, 'Pengelola Masayu', 'pengelola@joglomasayu.com', '081234567891', '$2y$12$i4apORqa1QG5MdvdpyFYreKTFUxnw4rK43Q2UWMEnStrQRJWPPO5a', 'pengelola', 'aktif', NOW(), NOW()),
+(3, 'Pemilik Villa', 'pemilik@joglomasayu.com', '081234567892', '$2y$12$gzNoLXliHUELuq.5S1eX..6cCKou71niVUIBMMSDCsT9wA1s1hyim', 'pemilik', 'aktif', NOW(), NOW()),
+(4, 'Budi Santoso', 'budi@gmail.com', '081298765432', '$2y$12$RjL5bxSO0XERmXe4Q5NJVeIaO8USqNio2JCm7jcp9BpWU0SlCLnuy', 'pelanggan', 'aktif', NOW(), NOW()),
+(5, 'Siti Rahma', 'siti@gmail.com', '081211223344', '$2y$12$RjL5bxSO0XERmXe4Q5NJVeIaO8USqNio2JCm7jcp9BpWU0SlCLnuy', 'pelanggan', 'aktif', NOW(), NOW());
 
 -- 2. Tipe Villa
 -- Data mengacu pada objek VILLAS di script.js

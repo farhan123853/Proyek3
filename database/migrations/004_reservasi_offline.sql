@@ -5,8 +5,23 @@
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- 1. Lepas FK id_pelanggan agar bisa diubah nullable
-ALTER TABLE `reservasi`
-  DROP FOREIGN KEY IF EXISTS `fk_reservasi_pelanggan`;
+SET @fk_reservasi_pelanggan_exists = (
+  SELECT COUNT(*)
+  FROM information_schema.REFERENTIAL_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'reservasi'
+    AND CONSTRAINT_NAME = 'fk_reservasi_pelanggan'
+);
+
+SET @drop_fk_reservasi_pelanggan = IF(
+  @fk_reservasi_pelanggan_exists > 0,
+  'ALTER TABLE `reservasi` DROP FOREIGN KEY `fk_reservasi_pelanggan`',
+  'SELECT ''FK fk_reservasi_pelanggan tidak ditemukan; dilewati'''
+);
+
+PREPARE stmt_drop_fk_reservasi_pelanggan FROM @drop_fk_reservasi_pelanggan;
+EXECUTE stmt_drop_fk_reservasi_pelanggan;
+DEALLOCATE PREPARE stmt_drop_fk_reservasi_pelanggan;
 
 -- 2. Modifikasi kolom id_pelanggan nullable + tambah kolom baru untuk reservasi offline
 ALTER TABLE `reservasi`

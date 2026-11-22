@@ -19,8 +19,24 @@ CREATE TABLE IF NOT EXISTS `pengguna` (
   `password_hash` VARCHAR(255) NOT NULL,
   `peran` ENUM('pelanggan', 'pengelola', 'pemilik', 'admin') NOT NULL DEFAULT 'pelanggan',
   `status_akun` ENUM('aktif', 'nonaktif') NOT NULL DEFAULT 'aktif',
+  `email_verified_at` DATETIME NULL DEFAULT NULL,
   `dibuat_pada` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY `uq_pengguna_google_id` (`google_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Token verifikasi email pelanggan
+CREATE TABLE IF NOT EXISTS `email_verification_tokens` (
+  `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `id_pengguna` INT NOT NULL,
+  `token_hash` CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `expires_at` DATETIME NOT NULL,
+  `used_at` DATETIME NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uq_email_token_hash` (`token_hash`),
+  INDEX `idx_email_token_user_created` (`id_pengguna`, `created_at`),
+  CONSTRAINT `fk_email_token_pengguna`
+    FOREIGN KEY (`id_pengguna`) REFERENCES `pengguna` (`id_pengguna`)
+    ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 2. Tabel Tipe Villa (Data diselaraskan dengan script.js)
