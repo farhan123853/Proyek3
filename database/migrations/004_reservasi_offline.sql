@@ -16,7 +16,7 @@ SET @fk_reservasi_pelanggan_exists = (
 SET @drop_fk_reservasi_pelanggan = IF(
   @fk_reservasi_pelanggan_exists > 0,
   'ALTER TABLE `reservasi` DROP FOREIGN KEY `fk_reservasi_pelanggan`',
-  'SELECT ''FK fk_reservasi_pelanggan tidak ditemukan; dilewati'''
+  'SELECT ''FK fk_reservasi_pelanggan tidak ditemukan - dilewati'''
 );
 
 PREPARE stmt_drop_fk_reservasi_pelanggan FROM @drop_fk_reservasi_pelanggan;

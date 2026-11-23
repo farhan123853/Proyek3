@@ -67,6 +67,7 @@ return [
         'logout_success' => 'You have successfully signed out.',
         'role_unauthorized' => 'You do not have access permission to that page.',
         'change_password_required' => 'Your password has been temporarily reset. Please set a new password to proceed.',
+        'email_verification_required_for_booking' => 'Please verify your email address before making a reservation.',
     ],
     'account' => [
         'title' => 'Account Settings',

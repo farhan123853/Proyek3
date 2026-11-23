@@ -67,6 +67,7 @@ return [
         'logout_success' => 'Anda telah berhasil keluar dari sistem.',
         'role_unauthorized' => 'Anda tidak memiliki hak akses ke halaman tersebut.',
         'change_password_required' => 'Kata sandi Anda telah direset sementara. Silakan buat kata sandi baru untuk melanjutkan.',
+        'email_verification_required_for_booking' => 'Verifikasi alamat email terlebih dahulu sebelum membuat reservasi.',
     ],
     'account' => [
         'title' => 'Pengaturan Akun',

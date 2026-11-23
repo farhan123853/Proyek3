@@ -18,15 +18,20 @@ function email_verification_is_complete(int $userId): bool
 {
     $pdo = get_db();
 
-    $stmt = $pdo->prepare(
-        "SELECT peran, email_verified_at
-         FROM pengguna
-         WHERE id_pengguna = ?
-         LIMIT 1"
-    );
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT peran, email_verified_at
+             FROM pengguna
+             WHERE id_pengguna = ?
+             LIMIT 1"
+        );
 
-    $stmt->execute([$userId]);
-    $user = $stmt->fetch();
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch();
+    } catch (\PDOException $e) {
+        // Fallback defensif jika kolom belum ada di database (sebelum migrasi)
+        return true;
+    }
 
     if (!$user) {
         return false;
@@ -36,7 +41,7 @@ function email_verification_is_complete(int $userId): bool
         return true;
     }
 
-    return $user['email_verified_at'] !== null;
+    return !empty($user['email_verified_at']);
 }
 
 

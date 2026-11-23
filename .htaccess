@@ -8,7 +8,7 @@ Options -Indexes
 # Lindungi folder internal agar tidak bisa diakses langsung lewat browser
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteRule ^(config|includes|database|cache|docs)/ - [F,L,NC]
+    RewriteRule ^(config|includes|database|cache|docs|tmp|tests|vendor)/ - [F,L,NC]
 </IfModule>
 
 # Blokir akses ke file sensitif

@@ -73,6 +73,15 @@ if (!is_string($idToken) || trim($idToken) === '') {
     ], 400);
 }
 
+// Periksa apakah Google Client ID sudah dikonfigurasi
+$googleClientId = trim($config['GOOGLE_CLIENT_ID'] ?? '');
+if ($googleClientId === '') {
+    google_auth_response([
+        'success' => false,
+        'message' => 'Layanan Google Sign-In belum dikonfigurasi pada sistem.'
+    ], 503);
+}
+
 try {
     // 1. Verifikasi identitas Google.
     $identity = google_auth_verify_id_token($idToken);

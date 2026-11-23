@@ -1,4 +1,3 @@
-
 <?php
 /**
  * Email Verification Confirmation

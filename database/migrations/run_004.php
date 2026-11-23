@@ -3,6 +3,13 @@
  * Jalankan Migration 004 — Villa Joglo Masayu
  * Usage: php database/migrations/run_004.php
  */
+
+if (php_sapi_name() !== 'cli') {
+    http_response_code(403);
+    echo "Akses ditolak: Skrip migrasi hanya boleh dijalankan melalui CLI.\n";
+    exit;
+}
+
 require_once __DIR__ . '/../../includes/bootstrap.php';
 try {
     $pdo = get_db();

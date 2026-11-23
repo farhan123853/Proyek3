@@ -16,7 +16,7 @@ if (
 ) {
     flash_set(
         'warning',
-        'Verifikasi alamat email terlebih dahulu sebelum membuat reservasi.'
+        t('auth.email_verification_required_for_booking')
     );
 
     redirect('pengaturan-akun.php');
