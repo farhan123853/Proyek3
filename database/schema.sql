@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS `pengguna` (
   `password_hash` VARCHAR(255) NOT NULL,
   `peran` ENUM('pelanggan', 'pengelola', 'pemilik', 'admin') NOT NULL DEFAULT 'pelanggan',
   `status_akun` ENUM('aktif', 'nonaktif') NOT NULL DEFAULT 'aktif',
+  `bahasa` VARCHAR(5) NOT NULL DEFAULT 'id',
   `email_verified_at` DATETIME NULL DEFAULT NULL,
   `dibuat_pada` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY `uq_pengguna_google_id` (`google_id`)

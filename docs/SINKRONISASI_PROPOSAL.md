@@ -111,3 +111,17 @@ Atas arahan dan persetujuan dosen pembimbing proyek, fitur prakiraan cuaca ekste
    - Permintaan reservasi berstatus `menunggu` tidak memblokir kalender ketersediaan; jika terjadi bentrok jadwal akibat konfirmasi reservasi lain, permintaan tersebut ditandai "Bentrok" di dashboard dan Pengelola menindaklanjutinya secara manual via WhatsApp.
    - *TODO Master Data*: Jumlah unit aktual (`jumlah_unit`) per tipe villa saat ini bernilai default 1 unit sesuai data awal; perlu dikonfirmasi kembali dengan pemilik jika terdapat penambahan unit fisik di masa mendatang.
 
+---
+
+## 6. Catatan Penambahan Fitur Otentikasi Lanjutan (Verifikasi Email & Google Sign-In)
+
+Fitur verifikasi email pelanggan dan login dengan Google Sign-In merupakan penambahan di luar cakupan proposal awal (tidak ada di proposal):
+1. **Entitas Basis Data `pengguna`**:
+   - Penambahan kolom `email_verified_at DATETIME NULL` untuk menyimpan waktu verifikasi email pelanggan (akun lama dan akun internal staf ditandai otomatis terverifikasi).
+   - Penambahan kolom `google_id VARCHAR(255) NULL` beserta indeks unik `uq_pengguna_google_id` untuk pemetaan identitas akun Google ke profil pelanggan lokal.
+2. **Tabel Baru `email_verification_tokens`**:
+   - Menyimpan hash token SHA-256 untuk tautan aktivasi email dengan batas kedaluwarsa dan status penggunaan.
+3. **Aturan Bisnis & Integrasi**:
+   - Pelanggan yang belum memverifikasi email dibatasi untuk membuat reservasi villa baru (diarahkan ke pengaturan akun), namun akun lama tetap dapat login dan mengakses reservasi yang sudah dibuat.
+   - Layanan pengiriman email menggunakan Google Apps Script webhook eksternal, dan Google Sign-In menggunakan Google Identity Services (GIS). Keduanya dirancang tidak memblokir aplikasi bila kredensial belum diisi (gagal rapi dengan pesan konfigurasi).
+

@@ -43,13 +43,16 @@ mysql -u root -p villa_joglo_masayu < database/schema.sql
 mysql -u root -p villa_joglo_masayu < database/seed.sql
 ```
 
-Jika database sudah dipakai sebelum fitur-fitur terbaru ditambahkan, **jangan impor ulang `schema.sql` atau `seed.sql`**. Cadangkan database terlebih dahulu, lalu pilih database `villa_joglo_masayu` di phpMyAdmin dan jalankan hanya migrasi yang belum diterapkan:
+Jika database sudah dipakai sebelum fitur-fitur terbaru ditambahkan, **jangan impor ulang `schema.sql` atau `seed.sql`**. Cadangkan database terlebih dahulu, lalu pilih database `villa_joglo_masayu` di phpMyAdmin (atau via CLI) dan jalankan hanya migrasi yang belum diterapkan dengan urutan berikut:
 
-1. `database/migrations/003_pembayaran.sql` — membuat tabel `pembayaran`.
-2. `database/migrations/004_reservasi_offline.sql` — menambahkan kolom reservasi offline dan tabel `blokir_tanggal`. Sebelum menjalankan, periksa `SHOW COLUMNS FROM reservasi;`. Jika kolom `nama_tamu`, `kontak_tamu`, `sumber`, atau `dibuat_oleh` sudah ada, jangan jalankan migrasi ini apa adanya; skema mungkin sudah termigrasi sebagian.
-3. `database/migrations/add_email_verification.sql` — menambahkan status verifikasi email dan tabel token. Jalankan hanya jika kolom `pengguna.email_verified_at` dan tabel `email_verification_tokens` belum ada.
+1. `database/migrations/001_dwibahasa.sql` — menambahkan kolom bahasa preferensi pengguna.
+2. `database/migrations/003_pembayaran.sql` — membuat tabel `pembayaran`.
+3. `database/migrations/004_reservasi_offline.sql` (atau jalankan `php database/migrations/run_004.php`) — menambahkan kolom reservasi offline pada tabel `reservasi` dan membuat tabel `blokir_tanggal`.
+4. `database/migrations/add_email_verification.sql` — menambahkan status verifikasi email (`pengguna.email_verified_at`), menandai akun lama sebagai terverifikasi, dan membuat tabel `email_verification_tokens`.
+5. `database/migrations/add_google_signin.sql` — menambahkan kolom `pengguna.google_id` dan indeks unik `uq_pengguna_google_id`.
 
-Urutan migrasi di atas berlaku untuk database lama yang belum menerapkan migrasi tersebut. Jangan jalankan ulang migrasi yang sudah berhasil diterapkan.
+> **Aturan Migrasi Database:**
+> Setiap perubahan struktur basis data berikutnya **wajib** dibuatkan berkas migrasi di direktori `database/migrations/` dengan format penamaan berurutan (misal: `005_nama_migrasi.sql`) dan dirancang **idempoten** (aman bila dijalankan ulang tanpa merusak data atau memicu error syntax). Jangan pernah mengubah skema langsung di database produksi tanpa file migrasi.
 
 ### Langkah 4: Pasang Ketergantungan Pustaka (Composer)
 Jalankan Composer untuk memasang dependensi resmi Midtrans PHP SDK:
