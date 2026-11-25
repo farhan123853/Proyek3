@@ -179,11 +179,15 @@ $stmtList = $pdo->prepare($sql);
 $stmtList->execute($params);
 $rawList = $stmtList->fetchAll();
 
+// Ambil semua pembayaran sekaligus dengan SATU query batch untuk semua reservasi yang tampil (mencegah N+1)
+$allIds = array_map(fn($item) => (int)$item['id_reservasi'], $rawList);
+$pembayaranBatch = ambil_pembayaran_batch($pdo, $allIds);
+
 // Olah status bayar efektif untuk setiap reservasi
 $reservasiList = [];
 foreach ($rawList as $r) {
     $idRes = (int)$r['id_reservasi'];
-    $bayarInfo = status_bayar_efektif($idRes);
+    $bayarInfo = $pembayaranBatch[$idRes] ?? ['status' => 'belum_dibayar', 'pembayaran' => null, 'history' => []];
     $statusBayar = $bayarInfo['status'];
 
     // Filter pembayaran client-side bila diisi
@@ -194,10 +198,7 @@ foreach ($rawList as $r) {
         if ($filterBayar === 'gagal_kedaluwarsa' && !in_array($statusBayar, ['gagal', 'kedaluwarsa'], true)) continue;
     }
 
-    // Ambil riwayat pembayaran untuk modal rincian
-    $stmtH = $pdo->prepare("SELECT * FROM pembayaran WHERE id_reservasi = ? ORDER BY id_pembayaran DESC");
-    $stmtH->execute([$idRes]);
-    $history = $stmtH->fetchAll();
+    $history = $bayarInfo['history'] ?? [];
 
     $r['bayar_status'] = $statusBayar;
     $r['bayar_pembayaran'] = $bayarInfo['pembayaran'];
@@ -399,12 +400,28 @@ require_once __DIR__ . '/../includes/layout/head.php';
                   <?php endif; ?>
                 </td>
                 <td class="p-3.5 text-xs">
-                  <?php if ($r['status'] === 'dikonfirmasi'): ?>
+                  <?php if ($r['status'] === 'dikonfirmasi' || !empty($r['bayar_pembayaran'])): ?>
                     <div><?= render_badge_pembayaran($r['bayar_status'], true) ?></div>
-                    <?php if (!empty($r['bayar_pembayaran']['metode_kelompok'])): ?>
-                      <div class="text-[11px] text-stone-500 mt-1">
-                        <?= format_metode_pembayaran($r['bayar_pembayaran']['metode_kelompok']) ?>
-                      </div>
+                    <?php if ($isLunas): ?>
+                      <?php if (!empty($r['bayar_pembayaran']['metode_kelompok'])): ?>
+                        <div class="text-[11px] text-stone-600 font-medium mt-1">
+                          <?= format_metode_pembayaran($r['bayar_pembayaran']['metode_kelompok']) ?>
+                        </div>
+                      <?php endif; ?>
+                      <?php if (!empty($r['bayar_pembayaran']['dibayar_pada'])): ?>
+                        <div class="text-[10px] text-stone-500 mt-0.5">
+                          <?= date('d/m/Y H:i', strtotime($r['bayar_pembayaran']['dibayar_pada'])) ?> WIB
+                        </div>
+                      <?php endif; ?>
+                      <a href="struk-pembayaran.php?id=<?= $idRes ?>" role="button" class="btn-open-struk inline-flex items-center gap-1 text-[11px] text-amber-900 hover:text-amber-700 font-semibold underline mt-1.5 focus:outline-none focus:ring-1 focus:ring-amber-500 rounded" data-id="<?= $idRes ?>" data-type="lunas" aria-haspopup="dialog">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        <span><?= t('payment.btn_view_receipt') ?></span>
+                      </a>
+                    <?php else: ?>
+                      <a href="struk-pembayaran.php?id=<?= $idRes ?>" role="button" class="btn-open-struk inline-flex items-center gap-1 text-[11px] text-stone-600 hover:text-stone-900 font-medium underline mt-1.5 focus:outline-none focus:ring-1 focus:ring-stone-400 rounded" data-id="<?= $idRes ?>" data-type="tagihan" aria-haspopup="dialog">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span><?= t('payment.btn_invoice_details') ?></span>
+                      </a>
                     <?php endif; ?>
                   <?php else: ?>
                     <span class="text-stone-400 text-xs">-</span>
@@ -493,7 +510,7 @@ require_once __DIR__ . '/../includes/layout/head.php';
               <span class="badge-status status-<?= e($r['status']) ?> text-[10px] px-2 py-0.5 rounded-full font-semibold">
                 <?= e(format_status_reservasi($r['status'])) ?>
               </span>
-              <?php if ($r['status'] === 'dikonfirmasi'): ?>
+              <?php if ($r['status'] === 'dikonfirmasi' || !empty($r['bayar_pembayaran'])): ?>
                 <?= render_badge_pembayaran($r['bayar_status'], true) ?>
               <?php endif; ?>
             </div>
@@ -508,9 +525,23 @@ require_once __DIR__ . '/../includes/layout/head.php';
                 <span class="text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.2 rounded font-bold ml-1"><?= t('payment.overdue_badge') ?></span>
               <?php endif; ?>
             </div>
+            <?php if ($isLunas && !empty($r['bayar_pembayaran']['dibayar_pada'])): ?>
+              <div class="text-[11px] text-stone-500">
+                <strong>Dibayar:</strong> <?= date('d/m/Y H:i', strtotime($r['bayar_pembayaran']['dibayar_pada'])) ?> WIB
+                <?php if (!empty($r['bayar_pembayaran']['metode_kelompok'])): ?>
+                  (<?= format_metode_pembayaran($r['bayar_pembayaran']['metode_kelompok']) ?>)
+                <?php endif; ?>
+              </div>
+            <?php endif; ?>
           </div>
 
           <div class="pt-3 flex items-center justify-end gap-2 flex-wrap text-xs">
+            <?php if ($r['status'] === 'dikonfirmasi' || !empty($r['bayar_pembayaran'])): ?>
+              <a href="struk-pembayaran.php?id=<?= $idRes ?>" role="button" class="btn-open-struk btn btn-sm btn-ghost border border-stone-300 text-xs py-1.5 px-2.5 inline-flex items-center gap-1 min-h-[44px]" data-id="<?= $idRes ?>" data-type="<?= $isLunas ? 'lunas' : 'tagihan' ?>" aria-haspopup="dialog">
+                <svg class="w-3.5 h-3.5 text-stone-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span><?= $isLunas ? t('payment.btn_view_receipt') : t('payment.btn_invoice_details') ?></span>
+              </a>
+            <?php endif; ?>
             <?php if ($r['status'] === 'menunggu'): ?>
               <form method="POST" action="dashboard/pengelola.php" onsubmit="return confirm('Setujui reservasi #RSV-<?= $idRes ?>?');" class="inline">
                 <?= csrf_field() ?>

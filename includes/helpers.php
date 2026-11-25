@@ -458,6 +458,75 @@ function status_bayar_efektif(int $idReservasi): array
 }
 
 /**
+ * Evaluasi status pembayaran efektif dari sekumpulan baris pembayaran (in-memory)
+ * Mengutamakan status 'lunas', lalu 'menunggu' terbaru, lalu status percobaan terakhir, atau 'belum_dibayar'
+ */
+function evaluasi_status_bayar(array $pembayaranList): array
+{
+    if (empty($pembayaranList)) {
+        return ['status' => 'belum_dibayar', 'pembayaran' => null];
+    }
+
+    // 1. Cek apakah ada pembayaran 'lunas'
+    foreach ($pembayaranList as $p) {
+        if (($p['status'] ?? '') === 'lunas') {
+            return ['status' => 'lunas', 'pembayaran' => $p];
+        }
+    }
+
+    // 2. Cek apakah ada pembayaran 'menunggu' (ambil yang terbaru / pertama jika DESC)
+    foreach ($pembayaranList as $p) {
+        if (($p['status'] ?? '') === 'menunggu') {
+            return ['status' => 'menunggu', 'pembayaran' => $p];
+        }
+    }
+
+    // 3. Status terakhir lainnya (ambil elemen pertama karena list terurut DESC)
+    $terakhir = reset($pembayaranList);
+    return ['status' => $terakhir['status'] ?? 'belum_dibayar', 'pembayaran' => $terakhir];
+}
+
+/**
+ * Mengambil semua pembayaran untuk daftar id_reservasi dalam satu query (mencegah N+1)
+ *
+ * @param PDO $pdo
+ * @param array $idReservasiList
+ * @return array [id_reservasi => ['status' => ..., 'pembayaran' => ..., 'history' => [...]]]
+ */
+function ambil_pembayaran_batch(PDO $pdo, array $idReservasiList): array
+{
+    $cleanIds = array_values(array_unique(array_filter(array_map('intval', $idReservasiList))));
+    if (empty($cleanIds)) {
+        return [];
+    }
+
+    $inPlaceholders = implode(',', array_fill(0, count($cleanIds), '?'));
+    $stmt = $pdo->prepare("SELECT * FROM pembayaran WHERE id_reservasi IN ($inPlaceholders) ORDER BY id_pembayaran DESC");
+    $stmt->execute($cleanIds);
+    $allPayments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $grouped = [];
+    foreach ($cleanIds as $id) {
+        $grouped[$id] = [];
+    }
+    foreach ($allPayments as $p) {
+        $idRes = (int)$p['id_reservasi'];
+        $grouped[$idRes][] = $p;
+    }
+
+    $result = [];
+    foreach ($grouped as $idRes => $list) {
+        $eval = evaluasi_status_bayar($list);
+        $result[$idRes] = [
+            'status' => $eval['status'],
+            'pembayaran' => $eval['pembayaran'],
+            'history' => $list,
+        ];
+    }
+    return $result;
+}
+
+/**
  * Pemetaan status transaksi Midtrans ke status internal sistem
  */
 function petakan_status_midtrans(string $transactionStatus, ?string $fraudStatus = null): string

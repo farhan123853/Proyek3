@@ -61,17 +61,24 @@ if (!empty($missingInId)) {
 }
 
 // 2. Pindai seluruh file PHP
-$files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($rootDir));
+class DirFilter extends RecursiveFilterIterator {
+    public function accept(): bool {
+        $name = $this->getFilename();
+        if ($this->isDir()) {
+            return !in_array($name, ['node_modules', 'vendor', '.git', 'tests', 'lang', 'tmp', 'uploads'], true);
+        }
+        return true;
+    }
+}
+
+$dirIter = new RecursiveDirectoryIterator($rootDir, RecursiveDirectoryIterator::SKIP_DOTS);
+$filterIter = new DirFilter($dirIter);
+$files = new RecursiveIteratorIterator($filterIter);
 $phpFiles = new RegexIterator($files, '/\.php$/');
 
 $usedKeys = [];
 foreach ($phpFiles as $file) {
     $path = $file->getRealPath();
-    // Abaikan folder vendor/ atau node_modules/ atau tests/
-    if (strpos($path, 'node_modules') !== false || strpos($path, 'tests') !== false || strpos($path, 'lang') !== false) {
-        continue;
-    }
-
     $content = file_get_contents($path);
     if (preg_match_all("/\bt\(\s*['\"]([a-zA-Z0-9_\.]+)['\"]/m", $content, $matches)) {
         foreach ($matches[1] as $key) {
