@@ -407,6 +407,12 @@ require_once __DIR__ . '/../includes/layout/head.php';
                 <!-- Aksi -->
                 <td class="p-3 text-right whitespace-nowrap">
                   <div class="inline-flex items-center gap-1.5 justify-end">
+                    <!-- Tombol Lihat Struk -->
+                    <a href="struk-pembayaran.php?id=<?= (int)$p['id_reservasi'] ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost border border-stone-300 text-[11px] py-1 px-2.5 rounded inline-flex items-center gap-1" title="<?= t('payment.btn_view_receipt') ?>">
+                      <svg class="w-3.5 h-3.5 text-stone-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                      <span><?= t('payment.btn_view_receipt') ?></span>
+                    </a>
+
                     <?php if ($isMidtrans): ?>
                       <button type="button" class="btn btn-sm btn-ghost border border-stone-300 text-[11px] py-1 px-2.5 rounded btn-sync-midtrans"
                               data-order-id="<?= e($p['order_id']) ?>">
@@ -483,7 +489,12 @@ require_once __DIR__ . '/../includes/layout/head.php';
             <?php endif; ?>
 
             <!-- Aksi Mobile -->
-            <div class="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 flex-wrap">
+              <a href="struk-pembayaran.php?id=<?= (int)$p['id_reservasi'] ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost border border-stone-300 text-xs py-2 px-3 rounded inline-flex items-center gap-1.5 min-h-[44px]">
+                <svg class="w-4 h-4 text-stone-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span><?= t('payment.btn_view_receipt') ?></span>
+              </a>
+
               <?php if ($isMidtrans): ?>
                 <button type="button" class="btn btn-sm btn-ghost border border-stone-300 text-xs py-1 px-3 rounded btn-sync-midtrans"
                         data-order-id="<?= e($p['order_id']) ?>">

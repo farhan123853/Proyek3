@@ -222,11 +222,15 @@ require_once __DIR__ . '/includes/layout/head.php';
                   </div>
                   <span><?= t('payment.contact_wa_change') ?>.</span>
                 </div>
-                <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <a href="struk-pembayaran.php?id=<?= $idRes ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost border border-stone-300 text-xs inline-flex items-center gap-1.5 py-1.5 px-3 min-h-[38px]">
+                    <svg class="w-4 h-4 text-stone-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span><?= t('payment.btn_pay_proof') ?></span>
+                  </a>
                   <?php
                     $pesanWaLunas = urlencode("Halo Pengelola Joglo Masayu, reservasi saya #RSV-{$idRes} untuk {$r['nama_villa']} sudah lunas. Saya ingin konfirmasi rincian kedatangan. Terima kasih.");
                   ?>
-                  <a href="https://wa.me/6281234567890?text=<?= $pesanWaLunas ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost text-xs inline-flex items-center gap-1.5 text-emerald-800 border-emerald-200 hover:bg-emerald-50">
+                  <a href="https://wa.me/6281234567890?text=<?= $pesanWaLunas ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost text-xs inline-flex items-center gap-1.5 text-emerald-800 border-emerald-200 hover:bg-emerald-50 min-h-[38px]">
                     <svg class="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.288.043.088.072.191.014.306-.058.115-.087.187-.173.289l-.26.302c-.087.087-.179.182-.077.357.101.174.451.744.969 1.205.666.594 1.229.778 1.403.865.174.087.275.072.376-.043.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.073.043.419-.101.824z"/></svg>
                     <span><?= t('my_bookings.btn_whatsapp') ?></span>
                   </a>
