@@ -573,6 +573,184 @@ require_once __DIR__ . '/../includes/layout/head.php';
   <?php endif; ?>
 </main>
 
+<!-- Drawer Slide-Over: Detail Pembayaran (Struk & Tagihan) -->
+<div id="drawer-struk-backdrop" class="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-sm hidden transition-opacity duration-300 opacity-0" aria-hidden="true"></div>
+
+<div id="drawer-struk" class="fixed inset-y-0 right-0 z-50 w-full md:max-w-xl bg-white shadow-2xl flex flex-col transform translate-x-full transition-transform duration-300 ease-in-out hidden" role="dialog" aria-modal="true" aria-labelledby="drawer-struk-title">
+  
+  <!-- Header Drawer -->
+  <div class="px-6 py-4 border-b border-stone-200 flex items-center justify-between bg-stone-50/90">
+    <div class="flex items-center gap-2.5">
+      <span class="w-2.5 h-2.5 rounded-full bg-amber-600"></span>
+      <div>
+        <h3 id="drawer-struk-title" class="font-serif font-bold text-stone-900 text-base md:text-lg leading-tight">
+          <?= t('payment.receipt_title') ?>
+        </h3>
+        <p id="drawer-struk-subtitle" class="text-[11px] text-stone-500 mb-0 font-mono">Villa Joglo Masayu</p>
+      </div>
+    </div>
+    <button type="button" id="btn-close-drawer-icon" class="text-stone-400 hover:text-stone-700 p-2 rounded-lg hover:bg-stone-200/60 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500" aria-label="<?= t('payment.btn_close_drawer') ?>">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <!-- Body Drawer (Scrollable) -->
+  <div class="flex-1 overflow-y-auto p-5 md:p-6 space-y-5 text-xs text-stone-700">
+    
+    <!-- State Loading -->
+    <div id="drawer-loading" class="py-20 text-center text-stone-400">
+      <svg class="animate-spin w-8 h-8 text-amber-700 mx-auto mb-3" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+      </svg>
+      <p class="text-xs"><?= t('payment.loading_receipt') ?></p>
+    </div>
+
+    <!-- State Error -->
+    <div id="drawer-error" class="hidden py-16 text-center text-stone-500">
+      <div class="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-3 font-bold">!</div>
+      <p id="drawer-error-msg" class="text-xs text-rose-700"><?= t('payment.error_load_receipt') ?></p>
+    </div>
+
+    <!-- Data Struk Loaded -->
+    <div id="drawer-data" class="hidden space-y-5">
+      
+      <!-- Status Badge & Order ID Header -->
+      <div class="bg-stone-50 border border-stone-200 rounded-xl p-4 flex items-center justify-between gap-3">
+        <div>
+          <span class="text-[10px] uppercase tracking-wider text-stone-500 font-semibold block"><?= t('payment.receipt_no') ?></span>
+          <span id="drawer-order-id" class="font-mono font-bold text-stone-900 text-sm"></span>
+          <div class="text-[11px] text-stone-500 mt-0.5" id="drawer-waktu-bayar"></div>
+        </div>
+        <div id="drawer-status-badge" class="shrink-0 text-right"></div>
+      </div>
+
+      <!-- Sandbox Notice jika Midtrans Sandbox -->
+      <div id="drawer-sandbox-notice" class="hidden p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-start gap-2">
+        <svg class="w-4 h-4 shrink-0 text-amber-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span><strong><?= t('payment.sandbox_badge') ?>:</strong> <?= t('payment.sandbox_notice') ?></span>
+      </div>
+
+      <!-- Detail Reservasi & Tamu -->
+      <div class="border border-stone-200 rounded-xl p-4 bg-white space-y-2.5">
+        <h4 class="font-serif font-bold text-stone-900 text-xs uppercase tracking-wider pb-1.5 border-b border-stone-100"><?= t('payment.guest_info') ?></h4>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <span class="text-stone-400 block"><?= t('payment.guest_info') ?></span>
+            <span id="drawer-guest-name" class="font-semibold text-stone-800"></span>
+          </div>
+          <div>
+            <span class="text-stone-400 block"><?= t('payment.guest_contact') ?></span>
+            <span id="drawer-guest-contact" class="text-stone-800"></span>
+          </div>
+          <div>
+            <span class="text-stone-400 block"><?= t('payment.villa_type') ?></span>
+            <span id="drawer-villa-name" class="font-semibold text-stone-800"></span>
+          </div>
+          <div>
+            <span class="text-stone-400 block"><?= t('payment.stay_period') ?></span>
+            <span id="drawer-period" class="text-stone-800"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detail Finansial -->
+      <div class="border border-stone-200 rounded-xl p-4 bg-white space-y-2.5">
+        <h4 class="font-serif font-bold text-stone-900 text-xs uppercase tracking-wider pb-1.5 border-b border-stone-100">Rincian Finansial</h4>
+        <dl class="space-y-1.5">
+          <div class="flex justify-between">
+            <dt class="text-stone-500">Tarif / Malam:</dt>
+            <dd id="drawer-rate" class="text-stone-800 text-right"></dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-stone-500">Durasi Menginap:</dt>
+            <dd id="drawer-duration" class="text-stone-800 text-right"></dd>
+          </div>
+          <div class="flex justify-between font-semibold pt-1 border-t border-stone-100">
+            <dt class="text-stone-900"><?= t('payment.total_amount') ?>:</dt>
+            <dd id="drawer-total" class="text-stone-900 text-right"></dd>
+          </div>
+          <div id="drawer-paid-row" class="flex justify-between text-emerald-700">
+            <dt><?= t('payment.amount_paid') ?>:</dt>
+            <dd id="drawer-paid" class="font-bold text-right"></dd>
+          </div>
+          <div id="drawer-unpaid-row" class="flex justify-between text-rose-700">
+            <dt><?= t('payment.unpaid_amount') ?>:</dt>
+            <dd id="drawer-unpaid" class="font-bold text-right"></dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Detail Metode Pembayaran -->
+      <div id="drawer-payment-details-card" class="border border-stone-200 rounded-xl p-4 bg-white space-y-2">
+        <h4 class="font-serif font-bold text-stone-900 text-xs uppercase tracking-wider pb-1.5 border-b border-stone-100"><?= t('payment.payment_method_label') ?></h4>
+        <div class="space-y-1.5">
+          <div class="flex justify-between">
+            <span class="text-stone-500"><?= t('payment.payment_method_label') ?>:</span>
+            <span id="drawer-method-label" class="font-semibold text-stone-800 text-right"></span>
+          </div>
+          <div id="drawer-tx-ref-row" class="flex justify-between">
+            <span class="text-stone-500"><?= t('payment.transaction_ref') ?>:</span>
+            <span id="drawer-tx-ref" class="font-mono text-stone-800 text-right"></span>
+          </div>
+          <div id="drawer-recorder-row" class="flex justify-between">
+            <span class="text-stone-500"><?= t('payment.recorded_by') ?>:</span>
+            <span id="drawer-recorder" class="text-stone-800 text-right"></span>
+          </div>
+          <div id="drawer-cash-note-row" class="pt-1 text-stone-600 italic">
+            <span class="text-stone-400 not-italic block text-[11px]"><?= t('payment.cash_note_label') ?>:</span>
+            <span id="drawer-cash-note"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Action jika Belum Lunas (Catat Tunai) -->
+      <div id="drawer-unpaid-action-box" class="hidden p-3.5 bg-amber-50/80 border border-amber-200 rounded-xl flex items-center justify-between gap-3">
+        <div class="text-xs text-amber-900">
+          <span class="font-semibold block">Tamu ingin membayar tunai?</span>
+          <span class="text-[11px] text-amber-700">Catat penerimaan fisik langsung di sini.</span>
+        </div>
+        <button type="button" id="btn-drawer-quick-cash" class="btn btn-sm btn-gold text-xs py-1.5 px-3 font-semibold shrink-0">
+          <?= t('payment.btn_record_cash') ?>
+        </button>
+      </div>
+
+      <!-- Riwayat Transaksi -->
+      <div id="drawer-history-section" class="hidden border border-stone-200 rounded-xl p-4 bg-white space-y-2">
+        <h4 class="font-serif font-bold text-stone-900 text-xs uppercase tracking-wider pb-1.5 border-b border-stone-100"><?= t('payment.payment_history') ?></h4>
+        <div id="drawer-history-list" class="space-y-1.5"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Footer Drawer (Tombol Aksi) -->
+  <div class="px-5 py-3.5 border-t border-stone-200 bg-stone-50 flex items-center justify-between gap-2 flex-wrap">
+    <div class="flex items-center gap-2 flex-wrap">
+      <button type="button" id="btn-drawer-copy" class="btn btn-sm btn-ghost border border-stone-300 text-xs py-2 px-3 inline-flex items-center gap-1.5 min-h-[44px]">
+        <svg class="w-4 h-4 text-stone-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        <span><?= t('payment.btn_copy_receipt') ?></span>
+      </button>
+
+      <a id="btn-drawer-wa" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-ghost border border-stone-300 text-xs py-2 px-3 inline-flex items-center gap-1.5 min-h-[44px]">
+        <svg class="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.288.043.088.072.191.014.306-.058.115-.087.187-.173.289l-.26.302c-.087.087-.179.182-.077.357.101.174.451.744.969 1.205.666.594 1.229.778 1.403.865.174.087.275.072.376-.043.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.073.043.419-.101.824z"/></svg>
+        <span><?= t('payment.btn_share_wa') ?></span>
+      </a>
+
+      <a id="btn-drawer-print" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-gold text-xs py-2 px-3.5 inline-flex items-center gap-1.5 font-semibold min-h-[44px]">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+        <span><?= t('payment.btn_print_pdf') ?></span>
+      </a>
+    </div>
+
+    <button type="button" id="btn-close-drawer-bottom" class="btn btn-sm btn-ghost border border-stone-200 text-xs py-2 px-3.5 text-stone-600 min-h-[44px]">
+      <?= t('payment.btn_close_drawer') ?>
+    </button>
+  </div>
+
+</div>
+
 <!-- Modal Pencatatan Pembayaran Tunai (Konfirmasi 2 Langkah) -->
 <div id="modal-catat-tunai" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title-tunai">
   <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-200 transform transition-all duration-200">
@@ -1026,11 +1204,262 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Keyboard ESC menutup modal
+  // ─── SLIDE-OVER DRAWER STRUK / RINCIAN TAGIHAN ───────────────────────────
+  let drawerTriggerBtn = null;
+  let currentDrawerOrderId = '';
+  let currentDrawerResvData = null;
+
+  const drawer = document.getElementById('drawer-struk');
+  const backdrop = document.getElementById('drawer-struk-backdrop');
+  const drawerLoading = document.getElementById('drawer-loading');
+  const drawerData = document.getElementById('drawer-data');
+  const drawerError = document.getElementById('drawer-error');
+  const btnCloseIcon = document.getElementById('btn-close-drawer-icon');
+  const btnCloseBottom = document.getElementById('btn-close-drawer-bottom');
+  const btnCopy = document.getElementById('btn-drawer-copy');
+  const btnPrint = document.getElementById('btn-drawer-print');
+  const btnWa = document.getElementById('btn-drawer-wa');
+  const btnQuickCash = document.getElementById('btn-drawer-quick-cash');
+
+  function openDrawer(id, triggerElement) {
+    drawerTriggerBtn = triggerElement || null;
+    currentDrawerOrderId = '';
+    currentDrawerResvData = null;
+
+    backdrop.classList.remove('hidden');
+    drawer.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+
+    requestAnimationFrame(function() {
+      backdrop.classList.add('opacity-100');
+      backdrop.classList.remove('opacity-0');
+      drawer.classList.remove('translate-x-full');
+    });
+
+    drawerLoading.classList.remove('hidden');
+    drawerData.classList.add('hidden');
+    drawerError.classList.add('hidden');
+
+    fetch('api/struk.php?id=' + encodeURIComponent(id))
+      .then(function(res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function(resp) {
+        if (!resp.ok || !resp.data) {
+          throw new Error(resp.pesan || 'Data tidak ditemukan.');
+        }
+        renderDrawerContent(resp.data);
+      })
+      .catch(function(err) {
+        drawerLoading.classList.add('hidden');
+        drawerError.classList.remove('hidden');
+        document.getElementById('drawer-error-msg').textContent = err.message || 'Gagal memuat data struk.';
+      });
+
+    setTimeout(function() {
+      if (btnCloseIcon) btnCloseIcon.focus();
+    }, 100);
+  }
+
+  function closeDrawer() {
+    backdrop.classList.remove('opacity-100');
+    backdrop.classList.add('opacity-0');
+    drawer.classList.add('translate-x-full');
+
+    setTimeout(function() {
+      backdrop.classList.add('hidden');
+      drawer.classList.add('hidden');
+      document.body.style.overflow = '';
+      if (drawerTriggerBtn && typeof drawerTriggerBtn.focus === 'function') {
+        drawerTriggerBtn.focus();
+      }
+    }, 300);
+  }
+
+  function renderDrawerContent(d) {
+    currentDrawerResvData = d;
+    const isLunas = d.is_lunas;
+    const pay = d.pembayaran || {};
+
+    currentDrawerOrderId = pay.order_id || d.kode_reservasi;
+
+    document.getElementById('drawer-struk-title').textContent = isLunas 
+      ? '<?= t('payment.receipt_title') ?> #' + d.kode_reservasi 
+      : '<?= t('payment.invoice_title') ?> #' + d.kode_reservasi;
+    
+    document.getElementById('drawer-order-id').textContent = currentDrawerOrderId;
+    document.getElementById('drawer-waktu-bayar').textContent = pay.dibayar_pada_fmt 
+      ? 'Waktu: ' + pay.dibayar_pada_fmt 
+      : 'Batas: Check-in villa';
+
+    const badgeContainer = document.getElementById('drawer-status-badge');
+    if (isLunas) {
+      badgeContainer.innerHTML = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300"><svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg><span>LUNAS</span></span>';
+    } else {
+      badgeContainer.innerHTML = '<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">MENUNGGU</span>';
+    }
+
+    const sandboxNotice = document.getElementById('drawer-sandbox-notice');
+    if (pay.is_sandbox) {
+      sandboxNotice.classList.remove('hidden');
+    } else {
+      sandboxNotice.classList.add('hidden');
+    }
+
+    document.getElementById('drawer-guest-name').textContent = d.tamu.nama;
+    document.getElementById('drawer-guest-contact').textContent = d.tamu.kontak;
+    document.getElementById('drawer-villa-name').textContent = d.villa.nama;
+    document.getElementById('drawer-period').textContent = d.jadwal.checkin_fmt + ' - ' + d.jadwal.checkout_fmt + ' (' + d.jadwal.malam + ' malam)';
+
+    document.getElementById('drawer-rate').textContent = d.villa.harga_per_malam_fmt;
+    document.getElementById('drawer-duration').textContent = d.jadwal.malam + ' Malam (' + d.jadwal.jumlah_tamu + ' Tamu)';
+    document.getElementById('drawer-total').textContent = d.keuangan.estimasi_total_fmt;
+    document.getElementById('drawer-paid').textContent = d.keuangan.total_dibayar_fmt;
+    document.getElementById('drawer-unpaid').textContent = d.keuangan.sisa_tagihan_fmt;
+
+    const paidRow = document.getElementById('drawer-paid-row');
+    const unpaidRow = document.getElementById('drawer-unpaid-row');
+    if (isLunas) {
+      paidRow.classList.remove('hidden');
+      unpaidRow.classList.add('hidden');
+    } else {
+      paidRow.classList.add('hidden');
+      unpaidRow.classList.remove('hidden');
+    }
+
+    const methodCard = document.getElementById('drawer-payment-details-card');
+    if (pay.metode_label) {
+      methodCard.classList.remove('hidden');
+      document.getElementById('drawer-method-label').textContent = pay.metode_label + (pay.metode_detail ? ' (' + pay.metode_detail + ')' : '');
+
+      const txRefRow = document.getElementById('drawer-tx-ref-row');
+      if (pay.transaction_ref) {
+        txRefRow.classList.remove('hidden');
+        document.getElementById('drawer-tx-ref').textContent = pay.transaction_ref;
+      } else {
+        txRefRow.classList.add('hidden');
+      }
+
+      const recRow = document.getElementById('drawer-recorder-row');
+      if (pay.dicatat_oleh) {
+        recRow.classList.remove('hidden');
+        document.getElementById('drawer-recorder').textContent = pay.dicatat_oleh;
+      } else {
+        recRow.classList.add('hidden');
+      }
+
+      const noteRow = document.getElementById('drawer-cash-note-row');
+      if (pay.catatan) {
+        noteRow.classList.remove('hidden');
+        document.getElementById('drawer-cash-note').textContent = '"' + pay.catatan + '"';
+      } else {
+        noteRow.classList.add('hidden');
+      }
+    } else {
+      methodCard.classList.add('hidden');
+    }
+
+    const unpaidBox = document.getElementById('drawer-unpaid-action-box');
+    if (!isLunas && d.status_reservasi === 'dikonfirmasi') {
+      unpaidBox.classList.remove('hidden');
+    } else {
+      unpaidBox.classList.add('hidden');
+    }
+
+    const historySec = document.getElementById('drawer-history-section');
+    const historyList = document.getElementById('drawer-history-list');
+    historyList.innerHTML = '';
+    if (Array.isArray(d.riwayat) && d.riwayat.length > 1) {
+      historySec.classList.remove('hidden');
+      d.riwayat.forEach(function(h) {
+        const item = document.createElement('div');
+        item.className = 'flex items-center justify-between p-2 bg-stone-50 rounded text-[11px]';
+        item.innerHTML = '<div><span class="font-mono font-medium">' + escapeHtml(h.order_id) + '</span><span class="text-stone-500 ml-1.5">&bull; ' + escapeHtml(h.metode_label) + '</span></div><div class="flex items-center gap-2"><span>' + escapeHtml(h.jumlah_fmt) + '</span>' + h.status_badge + '</div>';
+        historyList.appendChild(item);
+      });
+    } else {
+      historySec.classList.add('hidden');
+    }
+
+    btnPrint.href = 'struk-pembayaran.php?id=' + encodeURIComponent(d.id_reservasi) + '&print=1';
+    btnWa.href = d.wa_link || '#';
+
+    drawerLoading.classList.add('hidden');
+    drawerData.classList.remove('hidden');
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, function(m) {
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m];
+    });
+  }
+
+  document.querySelectorAll('.btn-open-struk').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+      e.preventDefault();
+      const id = this.getAttribute('data-id');
+      openDrawer(id, this);
+    });
+  });
+
+  if (btnCloseIcon) btnCloseIcon.addEventListener('click', closeDrawer);
+  if (btnCloseBottom) btnCloseBottom.addEventListener('click', closeDrawer);
+  if (backdrop) backdrop.addEventListener('click', closeDrawer);
+
+  if (btnCopy) {
+    btnCopy.addEventListener('click', function() {
+      if (!currentDrawerOrderId) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(currentDrawerOrderId).then(function() {
+          if (typeof showToast === 'function') {
+            showToast('<?= t('payment.copied_toast') ?>', 'success');
+          }
+        });
+      } else {
+        const temp = document.createElement('input');
+        temp.value = currentDrawerOrderId;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+        if (typeof showToast === 'function') {
+          showToast('<?= t('payment.copied_toast') ?>', 'success');
+        }
+      }
+    });
+  }
+
+  if (btnQuickCash) {
+    btnQuickCash.addEventListener('click', function() {
+      if (!currentDrawerResvData) return;
+      const d = currentDrawerResvData;
+      closeDrawer();
+      setTimeout(function() {
+        document.getElementById('modal-tunai-id').value = d.id_reservasi;
+        document.getElementById('modal-tunai-nama').textContent = d.tamu.nama;
+        document.getElementById('modal-tunai-nominal-fmt').textContent = d.keuangan.estimasi_total_fmt;
+        document.getElementById('modal-tunai-tanggal').value = getCurrentLocalDateTime();
+        document.getElementById('modal-tunai-catatan').value = '';
+        checkKonfirmasi.checked = false;
+        btnSubmitTunai.disabled = true;
+        modalTunai.classList.remove('hidden');
+      }, 350);
+    });
+  }
+
+  // Keyboard ESC menutup modal dan drawer
   document.addEventListener('keydown', function(e){
     if (e.key === 'Escape') {
+      if (drawer && !drawer.classList.contains('hidden')) {
+        closeDrawer();
+        return;
+      }
       document.getElementById('modalOffline')?.classList.add('hidden');
       document.getElementById('modalBlokir')?.classList.add('hidden');
+      document.getElementById('modal-catat-tunai')?.classList.add('hidden');
     }
   });
 })();
