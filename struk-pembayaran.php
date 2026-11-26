@@ -59,6 +59,9 @@ if (!$resv || (!$isStaff && (int)$resv['id_pelanggan'] !== $userId)) {
     exit;
 }
 
+// Staf admin/pengelola dan pemilik reservasi dapat melihat kode unmasked; pemilik properti (owner) masked
+$canSeeUnmaskedVa = in_array($userRole, ['admin', 'pengelola'], true) || ((int)$resv['id_pelanggan'] === $userId);
+
 // 5. Ambil data pembayaran
 $stmtBayar = $db->prepare("
     SELECT pb.*, staf.nama AS pencatat_nama
@@ -319,6 +322,25 @@ require_once __DIR__ . '/includes/layout/head.php';
           </div>
         </div>
 
+        <?php if (!empty($pembayaranUtama['kode_pembayaran'])): ?>
+          <?php
+            $displayCode = $canSeeUnmaskedVa 
+              ? format_nomor_va($pembayaranUtama['kode_pembayaran'], $pembayaranUtama['bank_atau_toko'])
+              : samarkan_kode_pembayaran($pembayaranUtama['kode_pembayaran']);
+          ?>
+          <div>
+            <span class="text-stone-500"><?= t('payment.va_card_title') ?> (<?= e(format_bank_atau_toko($pembayaranUtama['bank_atau_toko'])) ?>):</span>
+            <div class="font-mono font-bold text-stone-900 mt-0.5 text-sm">
+              <?= e($displayCode) ?>
+            </div>
+            <?php if (!empty($pembayaranUtama['kedaluwarsa_pada']) && !$isLunas): ?>
+              <div class="text-[11px] text-amber-700 mt-0.5">
+                <?= t('payment.expiry_time_label') ?>: <?= date('d/m/Y H:i', strtotime($pembayaranUtama['kedaluwarsa_pada'])) ?> WIB
+              </div>
+            <?php endif; ?>
+          </div>
+        <?php endif; ?>
+
         <?php if (!empty($pembayaranUtama['transaction_id'])): ?>
           <div>
             <span class="text-stone-500"><?= t('payment.transaction_ref') ?>:</span>
@@ -342,23 +364,41 @@ require_once __DIR__ . '/includes/layout/head.php';
       </div>
     <?php endif; ?>
 
-    <!-- Riwayat Transaksi (jika ada lebih dari 1 transaksi / percobaan) -->
+    <!-- Riwayat Percobaan Pembayaran -->
     <?php if (count($allPayments) > 1): ?>
       <div class="py-4 border-b border-stone-200 text-xs">
-        <h5 class="font-semibold text-stone-800 mb-2"><?= t('payment.payment_history') ?></h5>
-        <div class="space-y-1.5">
-          <?php foreach ($allPayments as $pHist): ?>
-            <div class="flex items-center justify-between p-2 bg-stone-50 rounded text-[11px]">
-              <div>
-                <span class="font-mono font-medium"><?= e($pHist['order_id']) ?></span>
-                <span class="text-stone-500 ml-1.5">&bull; <?= format_metode_pembayaran($pHist['metode_kelompok']) ?></span>
-              </div>
-              <div class="flex items-center gap-2">
-                <span><?= format_rupiah($pHist['jumlah']) ?></span>
-                <?= render_badge_pembayaran($pHist['status'], false) ?>
-              </div>
-            </div>
-          <?php endforeach; ?>
+        <h5 class="font-semibold text-stone-800 mb-2"><?= t('payment.attempt_history_title') ?></h5>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border border-stone-200 rounded">
+            <thead class="bg-stone-50 text-stone-600 border-b border-stone-200">
+              <tr>
+                <th class="p-2"><?= t('payment.attempt_no') ?></th>
+                <th class="p-2"><?= t('payment.bank_or_store') ?></th>
+                <th class="p-2"><?= t('payment.va_code_label') ?></th>
+                <th class="p-2"><?= t('payment.expiry_time_label') ?></th>
+                <th class="p-2">Status</th>
+                <th class="p-2 text-right">Nominal</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-stone-100 text-stone-700">
+              <?php 
+                $attIdx = count($allPayments);
+                foreach ($allPayments as $pHist): 
+                  $codeHist = $canSeeUnmaskedVa 
+                    ? format_nomor_va($pHist['kode_pembayaran'] ?? null, $pHist['bank_atau_toko'] ?? null)
+                    : samarkan_kode_pembayaran($pHist['kode_pembayaran'] ?? null);
+              ?>
+                <tr>
+                  <td class="p-2 font-mono">#<?= $attIdx-- ?></td>
+                  <td class="p-2 font-medium"><?= e(format_bank_atau_toko($pHist['bank_atau_toko'] ?? null)) ?></td>
+                  <td class="p-2 font-mono"><?= e($codeHist) ?></td>
+                  <td class="p-2 whitespace-nowrap text-stone-500"><?= !empty($pHist['kedaluwarsa_pada']) ? date('d/m/Y H:i', strtotime($pHist['kedaluwarsa_pada'])) : '-' ?></td>
+                  <td class="p-2"><?= render_badge_pembayaran($pHist['status'], false) ?></td>
+                  <td class="p-2 text-right font-semibold"><?= format_rupiah($pHist['jumlah']) ?></td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
         </div>
       </div>
     <?php endif; ?>

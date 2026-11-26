@@ -37,7 +37,7 @@ foreach ($reservasiList as $r) {
 
     // Ambil riwayat percobaan pembayaran untuk reservasi ini
     $stmtHistory = $pdo->prepare("
-        SELECT id_pembayaran, order_id, sumber, jumlah, status, metode_kelompok, metode_detail, snap_token, dibuat_pada, dibayar_pada
+        SELECT id_pembayaran, order_id, sumber, jumlah, status, metode_kelompok, metode_detail, snap_token, bank_atau_toko, kode_pembayaran, kedaluwarsa_pada, dibuat_pada, dibayar_pada
         FROM pembayaran
         WHERE id_reservasi = ?
         ORDER BY id_pembayaran DESC
@@ -220,6 +220,11 @@ require_once __DIR__ . '/includes/layout/head.php';
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
                     <span><?= t('payment.badge_lunas') ?> (<?= format_metode_pembayaran($pembayaranAktif['metode_kelompok'] ?? 'tunai') ?>)</span>
                   </div>
+                  <?php if (!empty($pembayaranAktif['kode_pembayaran'])): ?>
+                    <div class="text-[11px] font-mono text-stone-500 mb-0.5">
+                      <?= e(format_bank_atau_toko($pembayaranAktif['bank_atau_toko'] ?? null)) ?>: <?= e(samarkan_kode_pembayaran($pembayaranAktif['kode_pembayaran'])) ?>
+                    </div>
+                  <?php endif; ?>
                   <span><?= t('payment.contact_wa_change') ?>.</span>
                 </div>
                 <div class="flex items-center gap-2 flex-wrap">
@@ -237,28 +242,117 @@ require_once __DIR__ . '/includes/layout/head.php';
                 </div>
 
               <?php elseif ($statusBayar === 'menunggu'): ?>
-                <!-- Sub-Kondisi 2B: Transaksi Menunggu / Snap Token Aktif -->
-                <div class="text-xs text-stone-600">
-                  <div class="text-amber-800 font-semibold mb-0.5">
-                    <?= t('payment.expiry_notice', ['waktu' => $batasWaktuStr]) ?>
-                  </div>
-                  <span><?= t('payment.pay_cash_note') ?></span>
-                </div>
-                <div class="flex items-center gap-2 flex-wrap">
-                  <?php if (!empty($pembayaranAktif['snap_token'])): ?>
-                    <button type="button" class="btn btn-sm btn-gold btn-pay-snap text-xs py-1.5 px-3" data-id="<?= $idRes ?>" data-token="<?= e($pembayaranAktif['snap_token']) ?>">
-                      <?= t('payment.btn_continue') ?>
-                    </button>
-                  <?php else: ?>
-                    <button type="button" class="btn btn-sm btn-gold btn-pay-snap text-xs py-1.5 px-3" data-id="<?= $idRes ?>">
-                      <?= t('payment.btn_pay_now') ?>
-                    </button>
-                  <?php endif; ?>
+                <!-- Sub-Kondisi 2B: Transaksi Menunggu -->
+                <?php if (!empty($pembayaranAktif['kode_pembayaran'])): ?>
+                  <!-- KARTU KODE PEMBAYARAN VIRTUAL ACCOUNT -->
+                  <div class="w-full bg-gradient-to-br from-amber-50/90 via-stone-50 to-amber-100/30 border-2 border-amber-300 rounded-xl p-4 my-2 text-stone-900 shadow-sm">
+                    <div class="flex items-center justify-between pb-2.5 border-b border-amber-200/70 mb-3 flex-wrap gap-2">
+                      <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-amber-600 animate-pulse"></span>
+                        <span class="text-xs font-bold text-amber-950 uppercase tracking-wider"><?= t('payment.va_card_title') ?></span>
+                        <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-200/80 text-amber-950">
+                          <?= e(format_bank_atau_toko($pembayaranAktif['bank_atau_toko'] ?? null)) ?>
+                        </span>
+                      </div>
+                      <?php if (!empty($pembayaranAktif['kedaluwarsa_pada'])): ?>
+                        <div class="text-[11px] text-amber-900 font-medium flex items-center gap-1.5">
+                          <svg class="w-3.5 h-3.5 text-amber-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                          <span><?= t('payment.countdown_label') ?>:</span>
+                          <span class="va-countdown font-mono font-bold text-rose-700" data-expiry="<?= e($pembayaranAktif['kedaluwarsa_pada']) ?>" data-expired-text="<?= t('payment.countdown_expired') ?>">--:--:--</span>
+                        </div>
+                      <?php endif; ?>
+                    </div>
 
-                  <button type="button" class="btn btn-sm btn-ghost btn-check-status text-xs py-1.5 px-3 border border-stone-300" data-order-id="<?= e($pembayaranAktif['order_id'] ?? '') ?>">
-                    <?= t('payment.btn_check_status') ?>
-                  </button>
-                </div>
+                    <div class="mb-3">
+                      <div class="text-[11px] text-stone-600 mb-1 font-medium"><?= t('payment.va_code_label') ?> / Nomor Pembayaran:</div>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <div class="font-mono text-xl md:text-2xl font-bold tracking-wider text-stone-950 bg-white px-3.5 py-1.5 rounded-lg border border-amber-200 shadow-inner select-all">
+                          <?= e(format_nomor_va($pembayaranAktif['kode_pembayaran'], $pembayaranAktif['bank_atau_toko'])) ?>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-ghost border border-amber-300 bg-white hover:bg-amber-100/60 text-xs py-1.5 px-3 inline-flex items-center gap-1.5 btn-copy-clipboard" data-copy="<?= e(str_replace(' ', '', $pembayaranAktif['kode_pembayaran'])) ?>" data-toast="<?= t('payment.va_copied_toast') ?>">
+                          <svg class="w-3.5 h-3.5 text-amber-800" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                          <span><?= t('payment.btn_copy_va') ?></span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center justify-between text-xs py-2 px-3 bg-white/80 rounded-lg border border-amber-100 mb-3 flex-wrap gap-2">
+                      <div>
+                        <span class="text-stone-500"><?= t('payment.total_amount') ?>:</span>
+                        <span class="font-bold text-stone-900 ml-1 font-mono text-sm"><?= format_rupiah($pembayaranAktif['jumlah']) ?></span>
+                        <span class="text-[11px] text-stone-400 ml-2">No. Resi: <span class="font-mono"><?= e($pembayaranAktif['order_id']) ?></span></span>
+                      </div>
+                      <button type="button" class="text-xs text-amber-900 hover:text-amber-700 font-semibold underline inline-flex items-center gap-1 btn-copy-clipboard" data-copy="<?= (int)$pembayaranAktif['jumlah'] ?>" data-toast="<?= t('payment.amount_copied_toast') ?>">
+                        <?= t('payment.btn_copy_amount') ?>
+                      </button>
+                    </div>
+
+                    <!-- Panduan 3 Langkah Transfer -->
+                    <?php
+                      $steps = ambil_petunjuk_transfer($pembayaranAktif['bank_atau_toko'] ?? '', current_lang());
+                    ?>
+                    <div class="mt-3 pt-2.5 border-t border-amber-200/60">
+                      <div class="text-[11px] font-bold uppercase tracking-wider text-stone-700 mb-1.5"><?= t('payment.how_to_pay') ?>:</div>
+                      <ol class="space-y-1.5 text-xs text-stone-700">
+                        <?php foreach ($steps as $sIdx => $stepText): ?>
+                          <li class="flex items-start gap-2">
+                            <span class="w-4 h-4 rounded-full bg-amber-200 text-amber-900 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5"><?= $sIdx + 1 ?></span>
+                            <span><?= e($stepText) ?></span>
+                          </li>
+                        <?php endforeach; ?>
+                      </ol>
+                    </div>
+
+                    <!-- Tombol Aksi di Kartu VA -->
+                    <div class="mt-4 pt-3 border-t border-amber-200/70 flex items-center gap-2 flex-wrap">
+                      <button type="button" class="btn btn-sm btn-gold btn-check-status text-xs py-1.5 px-3" data-order-id="<?= e($pembayaranAktif['order_id']) ?>">
+                        <?= t('payment.btn_check_status') ?>
+                      </button>
+
+                      <button type="button" class="btn btn-sm btn-ghost bg-white border border-stone-300 text-xs py-1.5 px-3 btn-ganti-metode text-stone-700 hover:bg-stone-50" data-id="<?= $idRes ?>">
+                        <?= t('payment.btn_change_method') ?>
+                      </button>
+
+                      <?php
+                        $bankFmt = format_bank_atau_toko($pembayaranAktif['bank_atau_toko']);
+                        $kodeVa = $pembayaranAktif['kode_pembayaran'];
+                        $nomFmt = format_rupiah($pembayaranAktif['jumlah']);
+                        $batasStr = !empty($pembayaranAktif['kedaluwarsa_pada']) ? date('d/m/Y H:i', strtotime($pembayaranAktif['kedaluwarsa_pada'])) . ' WIB' : '-';
+                        $pesanWaVa = urlencode(current_lang() === 'en' 
+                          ? "Hello Joglo Masayu, I am confirming payment for reservation #RSV-{$idRes} ({$r['nama_villa']}). Method: {$bankFmt}, VA: {$kodeVa}, Amount: {$nomFmt}, Deadline: {$batasStr}."
+                          : "Halo Pengelola Joglo Masayu, saya konfirmasi pembayaran reservasi #RSV-{$idRes} ({$r['nama_villa']}). Metode: {$bankFmt}, VA: {$kodeVa}, Nominal: {$nomFmt}, Batas: {$batasStr}."
+                        );
+                      ?>
+                      <a href="https://wa.me/6281234567890?text=<?= $pesanWaVa ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost text-xs inline-flex items-center gap-1 text-emerald-800 border-emerald-200 hover:bg-emerald-50 py-1.5 px-2.5">
+                        <svg class="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.288.043.088.072.191.014.306-.058.115-.087.187-.173.289l-.26.302c-.087.087-.179.182-.077.357.101.174.451.744.969 1.205.666.594 1.229.778 1.403.865.174.087.275.072.376-.043.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.073.043.419-.101.824z"/></svg>
+                        <span>WhatsApp</span>
+                      </a>
+                    </div>
+                  </div>
+                <?php else: ?>
+                  <!-- Belum ada kode pembayaran terdaftar -->
+                  <div class="text-xs text-stone-600 mb-2">
+                    <div class="text-amber-800 font-semibold mb-0.5">
+                      <?= t('payment.no_va_notice') ?>
+                    </div>
+                    <span><?= t('payment.pay_cash_note') ?></span>
+                  </div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <?php if (!empty($pembayaranAktif['snap_token'])): ?>
+                      <button type="button" class="btn btn-sm btn-gold btn-pay-snap text-xs py-1.5 px-3" data-id="<?= $idRes ?>" data-token="<?= e($pembayaranAktif['snap_token']) ?>">
+                        <?= t('payment.btn_continue') ?>
+                      </button>
+                    <?php else: ?>
+                      <button type="button" class="btn btn-sm btn-gold btn-pay-snap text-xs py-1.5 px-3" data-id="<?= $idRes ?>">
+                        <?= t('payment.btn_pay_now') ?>
+                      </button>
+                    <?php endif; ?>
+
+                    <button type="button" class="btn btn-sm btn-ghost btn-check-status text-xs py-1.5 px-3 border border-stone-300" data-order-id="<?= e($pembayaranAktif['order_id'] ?? '') ?>">
+                      <?= t('payment.btn_check_status') ?>
+                    </button>
+                  </div>
+                <?php endif; ?>
 
               <?php elseif ($statusBayar === 'gagal' || $statusBayar === 'kedaluwarsa'): ?>
                 <!-- Sub-Kondisi 2C: Gagal atau Kedaluwarsa -->
@@ -302,7 +396,7 @@ require_once __DIR__ . '/includes/layout/head.php';
             <div class="mt-4 pt-3 border-t border-stone-100 text-xs">
               <details class="group cursor-pointer">
                 <summary class="flex items-center justify-between text-stone-500 hover:text-stone-800 select-none">
-                  <span class="font-semibold">Riwayat Percobaan Pembayaran (<?= count($history) ?>)</span>
+                  <span class="font-semibold"><?= t('payment.attempt_history_title') ?> (<?= count($history) ?>)</span>
                   <span class="text-stone-400 group-open:rotate-180 transition-transform duration-200">▾</span>
                 </summary>
                 <div class="mt-3 overflow-x-auto">
@@ -311,7 +405,9 @@ require_once __DIR__ . '/includes/layout/head.php';
                       <tr>
                         <th class="p-2">Waktu</th>
                         <th class="p-2">Order ID</th>
-                        <th class="p-2">Metode</th>
+                        <th class="p-2"><?= t('payment.bank_or_store') ?></th>
+                        <th class="p-2"><?= t('payment.va_code_label') ?></th>
+                        <th class="p-2"><?= t('payment.expiry_time_label') ?></th>
                         <th class="p-2">Nominal</th>
                         <th class="p-2">Status</th>
                       </tr>
@@ -321,7 +417,9 @@ require_once __DIR__ . '/includes/layout/head.php';
                         <tr>
                           <td class="p-2 whitespace-nowrap"><?= date('d/m/Y H:i', strtotime($h['dibuat_pada'])) ?></td>
                           <td class="p-2 font-mono"><?= e($h['order_id']) ?></td>
-                          <td class="p-2"><?= format_metode_pembayaran($h['metode_kelompok']) ?></td>
+                          <td class="p-2 font-medium"><?= e(format_bank_atau_toko($h['bank_atau_toko'] ?? null)) ?></td>
+                          <td class="p-2 font-mono"><?= e(format_nomor_va($h['kode_pembayaran'] ?? null, $h['bank_atau_toko'] ?? null)) ?></td>
+                          <td class="p-2 whitespace-nowrap text-stone-500"><?= !empty($h['kedaluwarsa_pada']) ? date('d/m/Y H:i', strtotime($h['kedaluwarsa_pada'])) : '-' ?></td>
                           <td class="p-2 font-semibold"><?= format_rupiah($h['jumlah']) ?></td>
                           <td class="p-2"><?= render_badge_pembayaran($h['status'], false) ?></td>
                         </tr>
@@ -492,7 +590,7 @@ require_once __DIR__ . '/includes/layout/head.php';
             if (typeof showToast === 'function') {
               showToast(data.pesan || 'Status: ' + data.status, 'success');
             }
-            setTimeout(function() { window.location.reload(); }, 1000);
+            setTimeout(function() { window.location.reload(); }, 800);
           } else {
             if (typeof showToast === 'function') {
               showToast((data && data.pesan) ? data.pesan : 'Gagal mengecek status', 'warning');
@@ -510,6 +608,111 @@ require_once __DIR__ . '/includes/layout/head.php';
         });
       });
     });
+
+    // 3. Handler Ganti Bank / Metode Pembayaran
+    document.querySelectorAll('.btn-ganti-metode').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const idReservasi = btn.getAttribute('data-id');
+        if (!idReservasi) return;
+
+        const origHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="inline-flex items-center gap-1.5"><svg class="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>Memuat...</span>';
+
+        const csrfToken = window.MASAYU_AUTH ? window.MASAYU_AUTH.csrf : '';
+        fetch('api/buat-pembayaran.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'id_reservasi=' + encodeURIComponent(idReservasi) + '&ganti_metode=1&csrf_token=' + encodeURIComponent(csrfToken)
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+          if (data && data.ok && data.token) {
+            if (window.snap) {
+              window.snap.pay(data.token, {
+                onSuccess: function() {
+                  if (typeof showToast === 'function') showToast(window.MASAYU_LANG === 'en' ? 'Payment successful!' : 'Pembayaran berhasil!', 'success');
+                  setTimeout(function() { window.location.reload(); }, 800);
+                },
+                onPending: function(result) {
+                  fetch('api/cek-status-pembayaran.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'order_id=' + encodeURIComponent(result.order_id) + '&csrf_token=' + encodeURIComponent(csrfToken)
+                  }).finally(function() {
+                    setTimeout(function() { window.location.reload(); }, 600);
+                  });
+                },
+                onError: function() {
+                  if (typeof showToast === 'function') showToast(window.MASAYU_LANG === 'en' ? 'Payment failed.' : 'Pembayaran gagal.', 'error');
+                }
+              });
+            } else {
+              window.location.reload();
+            }
+          } else {
+            if (typeof showToast === 'function') {
+              showToast((data && data.pesan) ? data.pesan : 'Gagal mengganti metode pembayaran', 'error');
+            }
+          }
+        })
+        .catch(function() {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+          if (typeof showToast === 'function') showToast('Terjadi kesalahan jaringan.', 'error');
+        });
+      });
+    });
+
+    // 4. Handler Salin Clipboard (Nomor VA & Nominal)
+    document.querySelectorAll('.btn-copy-clipboard').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const text = this.getAttribute('data-copy');
+        const toastMsg = this.getAttribute('data-toast') || 'Berhasil disalin!';
+        if (!text) return;
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function() {
+            if (typeof showToast === 'function') showToast(toastMsg, 'success');
+          });
+        } else {
+          const temp = document.createElement('textarea');
+          temp.value = text;
+          document.body.appendChild(temp);
+          temp.select();
+          document.execCommand('copy');
+          document.body.removeChild(temp);
+          if (typeof showToast === 'function') showToast(toastMsg, 'success');
+        }
+      });
+    });
+
+    // 5. Timer Hitung Mundur Sisa Waktu Pembayaran (Countdown)
+    function updateCountdowns() {
+      const elements = document.querySelectorAll('.va-countdown[data-expiry]');
+      const now = new Date().getTime();
+      elements.forEach(function(el) {
+        const expiryStr = el.getAttribute('data-expiry');
+        if (!expiryStr) return;
+        const expiryTime = new Date(expiryStr.replace(/-/g, '/')).getTime();
+        const diff = expiryTime - now;
+        if (diff <= 0) {
+          el.textContent = el.getAttribute('data-expired-text') || 'Kedaluwarsa';
+          el.classList.add('text-rose-600', 'font-bold');
+        } else {
+          const hours = Math.floor(diff / (1000 * 60 * 60));
+          const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          const secs = Math.floor((diff % (1000 * 60)) / 1000);
+          el.textContent = (hours < 10 ? '0' : '') + hours + 'j ' + (mins < 10 ? '0' : '') + mins + 'm ' + (secs < 10 ? '0' : '') + secs + 'd';
+        }
+      });
+    }
+    updateCountdowns();
+    setInterval(updateCountdowns, 1000);
   });
   </script>
   <?php endif; ?>

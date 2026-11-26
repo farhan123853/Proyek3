@@ -157,6 +157,27 @@ if (in_array($filterSumber, $allowedSumber, true)) {
     $params[] = $filterSumber;
 }
 
+// Filter pencarian teks: nomor reservasi, nama tamu, order ID, nomor VA, atau bank
+$searchQ = trim($_GET['q'] ?? '');
+if (!empty($searchQ)) {
+    $cleanId = ltrim($searchQ, '#rsvRSV- ');
+    $whereClauses[] = "(
+        r.id_reservasi = ? 
+        OR r.nama_tamu LIKE ? 
+        OR p.nama LIKE ? 
+        OR r.id_reservasi IN (
+            SELECT pb.id_reservasi FROM pembayaran pb 
+            WHERE pb.order_id LIKE ? OR pb.kode_pembayaran LIKE ? OR pb.bank_atau_toko LIKE ?
+        )
+    )";
+    $params[] = is_numeric($cleanId) ? (int)$cleanId : 0;
+    $params[] = '%' . $searchQ . '%';
+    $params[] = '%' . $searchQ . '%';
+    $params[] = '%' . $searchQ . '%';
+    $params[] = '%' . $searchQ . '%';
+    $params[] = '%' . $searchQ . '%';
+}
+
 $whereSql = !empty($whereClauses) ? "WHERE " . implode(" AND ", $whereClauses) : "";
 
 $sql = "SELECT r.*, v.nama AS nama_villa, v.slug AS slug_villa, 
@@ -319,7 +340,15 @@ require_once __DIR__ . '/../includes/layout/head.php';
         <option value="telepon" <?= $filterSumber === 'telepon' ? 'selected' : '' ?>><?= t('offline.sumber_telepon') ?></option>
       </select>
 
-      <?php if ($filterStatus || $filterBayar || $filterSumber): ?>
+      <!-- Input Pencarian (No. Reservasi, Nama, Order ID, VA) -->
+      <div class="inline-flex items-center gap-1">
+        <input type="text" name="q" value="<?= e($searchQ) ?>" placeholder="<?= t('payment.filter_va_placeholder') ?>" class="form-control text-xs py-1.5 px-3 rounded-lg border-stone-300 w-44 md:w-56" />
+        <button type="submit" class="btn btn-sm btn-ghost border border-stone-300 text-xs py-1.5 px-2.5">
+          <svg class="w-3.5 h-3.5 text-stone-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        </button>
+      </div>
+
+      <?php if ($filterStatus || $filterBayar || $filterSumber || $searchQ): ?>
         <a href="dashboard/pengelola.php" class="text-xs text-amber-800 hover:underline font-semibold ml-1">Reset Filter</a>
       <?php endif; ?>
     </form>
@@ -413,11 +442,21 @@ require_once __DIR__ . '/../includes/layout/head.php';
                           <?= date('d/m/Y H:i', strtotime($r['bayar_pembayaran']['dibayar_pada'])) ?> WIB
                         </div>
                       <?php endif; ?>
+                      <?php if (!empty($r['bayar_pembayaran']['kode_pembayaran'])): ?>
+                        <div class="text-[10px] text-stone-500 font-mono mt-0.5">
+                          <span class="text-stone-400 font-sans"><?= t('payment.va_code_label') ?>:</span> <?= e(samarkan_kode_pembayaran($r['bayar_pembayaran']['kode_pembayaran'])) ?>
+                        </div>
+                      <?php endif; ?>
                       <a href="struk-pembayaran.php?id=<?= $idRes ?>" role="button" class="btn-open-struk inline-flex items-center gap-1 text-[11px] text-amber-900 hover:text-amber-700 font-semibold underline mt-1.5 focus:outline-none focus:ring-1 focus:ring-amber-500 rounded" data-id="<?= $idRes ?>" data-type="lunas" aria-haspopup="dialog">
                         <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         <span><?= t('payment.btn_view_receipt') ?></span>
                       </a>
                     <?php else: ?>
+                      <?php if (!empty($r['bayar_pembayaran']['kode_pembayaran'])): ?>
+                        <div class="text-[10px] text-stone-700 font-mono mt-1 font-semibold">
+                          <span class="text-stone-400 font-sans"><?= t('payment.va_code_label') ?>:</span> <?= e(samarkan_kode_pembayaran($r['bayar_pembayaran']['kode_pembayaran'])) ?>
+                        </div>
+                      <?php endif; ?>
                       <a href="struk-pembayaran.php?id=<?= $idRes ?>" role="button" class="btn-open-struk inline-flex items-center gap-1 text-[11px] text-stone-600 hover:text-stone-900 font-medium underline mt-1.5 focus:outline-none focus:ring-1 focus:ring-stone-400 rounded" data-id="<?= $idRes ?>" data-type="tagihan" aria-haspopup="dialog">
                         <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                         <span><?= t('payment.btn_invoice_details') ?></span>
@@ -531,6 +570,11 @@ require_once __DIR__ . '/../includes/layout/head.php';
                 <?php if (!empty($r['bayar_pembayaran']['metode_kelompok'])): ?>
                   (<?= format_metode_pembayaran($r['bayar_pembayaran']['metode_kelompok']) ?>)
                 <?php endif; ?>
+              </div>
+            <?php endif; ?>
+            <?php if (!empty($r['bayar_pembayaran']['kode_pembayaran'])): ?>
+              <div class="text-[11px] text-stone-600 font-mono">
+                <strong><?= t('payment.va_code_label') ?>:</strong> <?= e(format_bank_atau_toko($r['bayar_pembayaran']['bank_atau_toko'] ?? null)) ?> <?= e(samarkan_kode_pembayaran($r['bayar_pembayaran']['kode_pembayaran'])) ?>
               </div>
             <?php endif; ?>
           </div>
@@ -692,6 +736,20 @@ require_once __DIR__ . '/../includes/layout/head.php';
           <div id="drawer-tx-ref-row" class="flex justify-between">
             <span class="text-stone-500"><?= t('payment.transaction_ref') ?>:</span>
             <span id="drawer-tx-ref" class="font-mono text-stone-800 text-right"></span>
+          </div>
+          <div id="drawer-va-row" class="hidden flex justify-between items-center py-1 border-t border-stone-100">
+            <span class="text-stone-500"><?= t('payment.va_card_title') ?>:</span>
+            <div class="flex items-center gap-1.5">
+              <span id="drawer-va-bank" class="text-stone-600 font-medium text-xs"></span>
+              <span id="drawer-va-code" class="font-mono font-bold text-stone-900 text-xs"></span>
+              <button type="button" id="btn-drawer-copy-va" class="text-amber-800 hover:text-amber-600 p-0.5" title="<?= t('payment.btn_copy_va') ?>">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+              </button>
+            </div>
+          </div>
+          <div id="drawer-expiry-row" class="hidden flex justify-between items-center text-[11px] text-amber-800">
+            <span><?= t('payment.expiry_time_label') ?>:</span>
+            <span id="drawer-expiry-time" class="font-medium"></span>
           </div>
           <div id="drawer-recorder-row" class="flex justify-between">
             <span class="text-stone-500"><?= t('payment.recorded_by') ?>:</span>
@@ -1341,6 +1399,23 @@ document.addEventListener('DOMContentLoaded', function() {
         txRefRow.classList.add('hidden');
       }
 
+      const vaRow = document.getElementById('drawer-va-row');
+      const expiryRow = document.getElementById('drawer-expiry-row');
+      if (pay.kode_pembayaran) {
+        vaRow.classList.remove('hidden');
+        document.getElementById('drawer-va-bank').textContent = (pay.bank_atau_toko_label && pay.bank_atau_toko_label !== '-') ? pay.bank_atau_toko_label + ' · ' : '';
+        document.getElementById('drawer-va-code').textContent = pay.kode_pembayaran_fmt || pay.kode_pembayaran;
+        if (pay.kedaluwarsa_pada_fmt) {
+          expiryRow.classList.remove('hidden');
+          document.getElementById('drawer-expiry-time').textContent = pay.kedaluwarsa_pada_fmt;
+        } else {
+          expiryRow.classList.add('hidden');
+        }
+      } else {
+        vaRow.classList.add('hidden');
+        expiryRow.classList.add('hidden');
+      }
+
       const recRow = document.getElementById('drawer-recorder-row');
       if (pay.dicatat_oleh) {
         recRow.classList.remove('hidden');
@@ -1374,8 +1449,13 @@ document.addEventListener('DOMContentLoaded', function() {
       historySec.classList.remove('hidden');
       d.riwayat.forEach(function(h) {
         const item = document.createElement('div');
-        item.className = 'flex items-center justify-between p-2 bg-stone-50 rounded text-[11px]';
-        item.innerHTML = '<div><span class="font-mono font-medium">' + escapeHtml(h.order_id) + '</span><span class="text-stone-500 ml-1.5">&bull; ' + escapeHtml(h.metode_label) + '</span></div><div class="flex items-center gap-2"><span>' + escapeHtml(h.jumlah_fmt) + '</span>' + h.status_badge + '</div>';
+        item.className = 'p-2.5 bg-stone-50 rounded text-[11px] border border-stone-100 space-y-1';
+        let vaInfo = '';
+        if (h.kode_pembayaran) {
+          vaInfo = '<div class="text-[10px] text-stone-600 font-mono font-medium">VA: ' + escapeHtml(h.kode_pembayaran_fmt || h.kode_pembayaran) + (h.bank_atau_toko_label ? ' (' + escapeHtml(h.bank_atau_toko_label) + ')' : '') + '</div>';
+        }
+        item.innerHTML = '<div class="flex items-center justify-between"><span class="font-mono font-semibold text-stone-800">' + escapeHtml(h.order_id) + '</span><span class="text-stone-400 text-[10px]">' + escapeHtml(h.dibuat_pada_fmt || '') + '</span></div>' +
+          '<div class="flex items-center justify-between"><span>' + escapeHtml(h.metode_label) + ' &bull; <strong>' + escapeHtml(h.jumlah_fmt) + '</strong></span>' + h.status_badge + '</div>' + vaInfo;
         historyList.appendChild(item);
       });
     } else {
@@ -1428,6 +1508,27 @@ document.addEventListener('DOMContentLoaded', function() {
         if (typeof showToast === 'function') {
           showToast('<?= t('payment.copied_toast') ?>', 'success');
         }
+      }
+    });
+  }
+
+  const btnDrawerCopyVa = document.getElementById('btn-drawer-copy-va');
+  if (btnDrawerCopyVa) {
+    btnDrawerCopyVa.addEventListener('click', function() {
+      if (!currentDrawerResvData || !currentDrawerResvData.pembayaran || !currentDrawerResvData.pembayaran.kode_pembayaran) return;
+      const cleanCode = String(currentDrawerResvData.pembayaran.kode_pembayaran).replace(/\s+/g, '');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(cleanCode).then(function() {
+          if (typeof showToast === 'function') showToast('<?= t('payment.va_copied_toast') ?>', 'success');
+        });
+      } else {
+        const temp = document.createElement('input');
+        temp.value = cleanCode;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+        if (typeof showToast === 'function') showToast('<?= t('payment.va_copied_toast') ?>', 'success');
       }
     });
   }

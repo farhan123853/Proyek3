@@ -145,9 +145,13 @@ if (in_array($filterSumber, $allowedSumberList, true)) {
 
 if (!empty($searchQuery)) {
     $cleanQ = ltrim($searchQuery, '#rsvRSV- ');
-    $whereTrx[] = "(p.order_id LIKE ? OR p.id_reservasi = ?)";
+    $whereTrx[] = "(p.order_id LIKE ? OR p.id_reservasi = ? OR p.kode_pembayaran LIKE ? OR p.bank_atau_toko LIKE ? OR pel.nama LIKE ? OR r.nama_tamu LIKE ?)";
     $paramsTrx[] = '%' . $searchQuery . '%';
     $paramsTrx[] = is_numeric($cleanQ) ? (int)$cleanQ : 0;
+    $paramsTrx[] = '%' . $searchQuery . '%';
+    $paramsTrx[] = '%' . $searchQuery . '%';
+    $paramsTrx[] = '%' . $searchQuery . '%';
+    $paramsTrx[] = '%' . $searchQuery . '%';
 }
 
 $whereTrxSql = !empty($whereTrx) ? 'WHERE ' . implode(' AND ', $whereTrx) : '';
@@ -314,6 +318,8 @@ require_once __DIR__ . '/../includes/layout/head.php';
           <tr>
             <th class="p-3"><?= t('admin.col_order_id') ?></th>
             <th class="p-3"><?= t('admin.col_reservation') ?></th>
+            <th class="p-3"><?= t('payment.bank_or_store') ?></th>
+            <th class="p-3"><?= t('payment.va_code_label') ?></th>
             <th class="p-3"><?= t('admin.col_amount') ?></th>
             <th class="p-3"><?= t('admin.col_source') ?></th>
             <th class="p-3"><?= t('admin.col_method') ?></th>
@@ -326,7 +332,7 @@ require_once __DIR__ . '/../includes/layout/head.php';
         <tbody class="divide-y divide-stone-100 text-stone-700">
           <?php if (empty($transaksiList)): ?>
             <tr>
-              <td colspan="9" class="p-8 text-center text-stone-500">
+              <td colspan="11" class="p-8 text-center text-stone-500">
                 <?= t('admin.empty_transactions') ?>
               </td>
             </tr>
@@ -356,6 +362,25 @@ require_once __DIR__ . '/../includes/layout/head.php';
                   <span class="font-mono font-bold text-amber-900 block">#RSV-<?= $p['id_reservasi'] ?></span>
                   <span class="text-stone-800 font-medium block"><?= e($p['nama_pelanggan']) ?></span>
                   <span class="text-[11px] text-stone-400"><?= e($p['nama_villa']) ?></span>
+                </td>
+
+                <!-- Bank / Toko -->
+                <td class="p-3 text-stone-800 font-medium whitespace-nowrap">
+                  <?= e(format_bank_atau_toko($p['bank_atau_toko'] ?? null)) ?>
+                </td>
+
+                <!-- Kode VA (Unmasked untuk Admin) -->
+                <td class="p-3 font-mono whitespace-nowrap">
+                  <?php if (!empty($p['kode_pembayaran'])): ?>
+                    <span class="font-bold text-stone-900 select-all block"><?= e(format_nomor_va($p['kode_pembayaran'], $p['bank_atau_toko'])) ?></span>
+                    <?php if (strpos((string)$p['catatan'], 'duplikat kode VA') !== false): ?>
+                      <span class="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                        <?= t('payment.badge_review_dup_va') ?>
+                      </span>
+                    <?php endif; ?>
+                  <?php else: ?>
+                    <span class="text-stone-400">-</span>
+                  <?php endif; ?>
                 </td>
 
                 <!-- Nominal -->
@@ -475,6 +500,18 @@ require_once __DIR__ . '/../includes/layout/head.php';
                 <?= render_badge_pembayaran($p['status'], true) ?>
               </div>
             </div>
+
+            <?php if (!empty($p['kode_pembayaran'])): ?>
+              <div class="mb-2 p-2 bg-stone-50 border border-stone-200 rounded font-mono text-xs flex items-center justify-between">
+                <div>
+                  <span class="text-stone-500 font-sans block text-[10px]"><?= e(format_bank_atau_toko($p['bank_atau_toko'] ?? null)) ?>:</span>
+                  <span class="font-bold text-stone-900"><?= e(format_nomor_va($p['kode_pembayaran'], $p['bank_atau_toko'])) ?></span>
+                </div>
+                <?php if (strpos((string)$p['catatan'], 'duplikat kode VA') !== false): ?>
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300"><?= t('payment.badge_review_dup_va') ?></span>
+                <?php endif; ?>
+              </div>
+            <?php endif; ?>
 
             <?php if ($isGanda): ?>
               <div class="mb-2 p-2 bg-purple-50 text-purple-900 border border-purple-200 rounded text-[11px]">
