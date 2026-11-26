@@ -165,7 +165,10 @@ Menyimpan transaksi permohonan reservasi villa baik secara online oleh pelanggan
 | `tanggal_checkout` | `DATE` | No | Tanggal keluar (check-out) |
 | `jumlah_tamu` | `INT` | No | Jumlah orang yang menginap |
 | `catatan` | `TEXT` | Yes | Catatan atau permintaan khusus dari tamu |
-| `status` | `ENUM` | No | `'menunggu'`, `'dikonfirmasi'`, `'ditolak'`, `'dibatalkan'` |
+| `status` | `ENUM` | No | `'menunggu'`, `'dikonfirmasi'`, `'ditolak'`, `'dibatalkan'`, `'kedaluwarsa'` |
+| `batas_bayar_pada` | `DATETIME` | Yes | Batas waktu pembayaran resmi (WIB) |
+| `rencana_bayar` | `ENUM` | No | Pilihan kanal pelunasan tamu: `'online'`, `'tunai'` (default: `'online'`) |
+| `kedaluwarsa_pada` | `DATETIME` | Yes | Waktu aktual reservasi ditutup otomatis karena lewat batas bayar (WIB) |
 | `harga_weekday_saat_pesan` | `DECIMAL(12,2)` | No | Snapshot tarif weekday saat transaksi dibuat |
 | `harga_weekend_saat_pesan` | `DECIMAL(12,2)` | No | Snapshot tarif weekend saat transaksi dibuat |
 | `harga_extrabed_saat_pesan` | `DECIMAL(12,2)` | No | Snapshot tarif extra bed saat transaksi dibuat |
@@ -232,6 +235,21 @@ Menyimpan hash token verifikasi email pelanggan. Token asli hanya dikirim melalu
 | `created_at` | `DATETIME` | No | Waktu token dibuat |
 
 Kolom `pengguna.email_verified_at` menyimpan waktu verifikasi. Nilai `NULL` berarti email pelanggan belum terverifikasi.
+
+---
+
+### Tabel 7: `reservasi_log`
+Mencatat seluruh rekam jejak audit mutasi status reservasi (pengajuan, konfirmasi, penolakan, pembatalan offline, kedaluwarsa otomatis, maupun reaktivasi pasca-pembayaran terlambat).
+
+| Nama Kolom | Tipe Data | Nullable | Keterangan |
+|---|---|---|---|
+| `id_log` | `INT` | No | Primary Key, Auto Increment |
+| `id_reservasi` | `INT` | No | FK ke `reservasi.id_reservasi` (ON DELETE CASCADE ON UPDATE CASCADE) |
+| `dari_status` | `ENUM` | Yes | Status sebelumnya (`'menunggu'`, `'dikonfirmasi'`, `'ditolak'`, `'dibatalkan'`, `'kedaluwarsa'`, atau `NULL` untuk inisialisasi) |
+| `ke_status` | `ENUM` | No | Status tujuan setelah perubahan |
+| `oleh_pengguna` | `INT` | Yes | FK ke `pengguna.id_pengguna` (staf / tamu yang mengubah status, atau `NULL` jika diproses oleh sistem otomatis) |
+| `alasan` | `VARCHAR(200)` | Yes | Keterangan atau alasan perubahan status |
+| `dibuat_pada` | `DATETIME` | No | Waktu pencatatan log transaksi (WIB) |
 
 ---
 

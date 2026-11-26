@@ -69,13 +69,17 @@ CREATE TABLE IF NOT EXISTS `reservasi` (
   `tanggal_checkout` DATE NOT NULL,
   `jumlah_tamu` INT NOT NULL,
   `catatan` TEXT NULL,
-  `status` ENUM('menunggu', 'dikonfirmasi', 'ditolak', 'dibatalkan') NOT NULL DEFAULT 'menunggu',
+  `status` ENUM('menunggu', 'dikonfirmasi', 'ditolak', 'dibatalkan', 'kedaluwarsa') NOT NULL DEFAULT 'menunggu',
+  `batas_bayar_pada` DATETIME NULL,
+  `rencana_bayar` ENUM('online', 'tunai') NOT NULL DEFAULT 'online',
+  `kedaluwarsa_pada` DATETIME NULL,
   `harga_weekday_saat_pesan` DECIMAL(12,2) NOT NULL,
   `harga_weekend_saat_pesan` DECIMAL(12,2) NOT NULL,
   `harga_extrabed_saat_pesan` DECIMAL(12,2) NOT NULL,
   `estimasi_total` DECIMAL(12,2) NOT NULL,
   `dibuat_pada` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX `idx_ketersediaan` (`id_tipe`, `tanggal_checkin`, `tanggal_checkout`, `status`),
+  INDEX `idx_reservasi_status_batas` (`status`, `batas_bayar_pada`),
   CONSTRAINT `fk_reservasi_pelanggan` FOREIGN KEY (`id_pelanggan`) REFERENCES `pengguna` (`id_pengguna`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `fk_reservasi_tipe` FOREIGN KEY (`id_tipe`) REFERENCES `tipe_villa` (`id_tipe`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `fk_reservasi_pengelola` FOREIGN KEY (`diproses_oleh`) REFERENCES `pengguna` (`id_pengguna`) ON DELETE SET NULL ON UPDATE CASCADE,
@@ -127,6 +131,21 @@ CREATE TABLE IF NOT EXISTS `pembayaran` (
   CONSTRAINT `fk_pembayaran_reservasi` FOREIGN KEY (`id_reservasi`) REFERENCES `reservasi` (`id_reservasi`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `fk_pembayaran_dicatat` FOREIGN KEY (`dicatat_oleh`) REFERENCES `pengguna` (`id_pengguna`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_pembayaran_dibatalkan` FOREIGN KEY (`dibatalkan_oleh`) REFERENCES `pengguna` (`id_pengguna`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 6. Tabel Log Riwayat Perubahan Status Reservasi
+CREATE TABLE IF NOT EXISTS `reservasi_log` (
+  `id_log` INT AUTO_INCREMENT PRIMARY KEY,
+  `id_reservasi` INT NOT NULL,
+  `dari_status` ENUM('menunggu', 'dikonfirmasi', 'ditolak', 'dibatalkan', 'kedaluwarsa') NULL,
+  `ke_status` ENUM('menunggu', 'dikonfirmasi', 'ditolak', 'dibatalkan', 'kedaluwarsa') NOT NULL,
+  `oleh_pengguna` INT NULL,
+  `alasan` VARCHAR(200) NULL,
+  `dibuat_pada` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_reservasi_log_id` (`id_reservasi`),
+  INDEX `idx_reservasi_log_dibuat` (`dibuat_pada`),
+  CONSTRAINT `fk_reservasi_log_reservasi` FOREIGN KEY (`id_reservasi`) REFERENCES `reservasi` (`id_reservasi`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_reservasi_log_pengguna` FOREIGN KEY (`oleh_pengguna`) REFERENCES `pengguna` (`id_pengguna`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;
