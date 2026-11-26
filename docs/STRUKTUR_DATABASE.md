@@ -92,6 +92,10 @@ erDiagram
         enum status "menunggu, lunas, gagal, kedaluwarsa, ganda, dibatalkan"
         enum metode_kelompok "transfer_bank, e_wallet, tunai, lainnya"
         varchar metode_detail
+        varchar bank_atau_toko
+        varchar kode_pembayaran
+        datetime kedaluwarsa_pada
+        datetime kode_dibuat_pada
         varchar transaction_id
         varchar snap_token
         varchar catatan
@@ -199,6 +203,10 @@ Menyimpan riwayat percobaan transaksi pembayaran online (Midtrans Snap) dan penc
 | `status` | `ENUM` | No | `'menunggu'`, `'lunas'`, `'gagal'`, `'kedaluwarsa'`, `'ganda'`, `'dibatalkan'` |
 | `metode_kelompok` | `ENUM` | Yes | Kelompok metode: `'transfer_bank'`, `'e_wallet'`, `'tunai'`, `'lainnya'` |
 | `metode_detail` | `VARCHAR(30)` | Yes | Rincian `payment_type` Midtrans (misal: `bca_va`, `gopay`, `qris`) atau `'cash'` |
+| `bank_atau_toko` | `VARCHAR(30)` | Yes | Nama bank penerbit VA (bca, bni, bri, mandiri, permata, cimb) atau nama minimarket (indomaret, alfamart) |
+| `kode_pembayaran` | `VARCHAR(64)` | Yes | Nomor Virtual Account atau kode pembayaran minimarket yang diterbitkan Midtrans |
+| `kedaluwarsa_pada` | `DATETIME` | Yes | Waktu batas kedaluwarsa pembayaran resmi dari Midtrans (`expiry_time`) dalam zona waktu WIB |
+| `kode_dibuat_pada` | `DATETIME` | Yes | Waktu pencatatan/penerbitan nomor kode pembayaran (WIB) |
 | `transaction_id` | `VARCHAR(64)` | Yes | ID transaksi unik dari sistem Midtrans |
 | `snap_token` | `VARCHAR(100)` | Yes | Token sesi pembayaran Midtrans Snap |
 | `catatan` | `VARCHAR(200)` | Yes | Catatan tambahan transaksi |

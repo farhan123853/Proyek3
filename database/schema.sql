@@ -107,6 +107,10 @@ CREATE TABLE IF NOT EXISTS `pembayaran` (
   `status` ENUM('menunggu', 'lunas', 'gagal', 'kedaluwarsa', 'ganda', 'dibatalkan') NOT NULL DEFAULT 'menunggu',
   `metode_kelompok` ENUM('transfer_bank', 'e_wallet', 'tunai', 'lainnya') NULL,
   `metode_detail` VARCHAR(30) NULL,
+  `bank_atau_toko` VARCHAR(30) NULL,
+  `kode_pembayaran` VARCHAR(64) NULL,
+  `kedaluwarsa_pada` DATETIME NULL,
+  `kode_dibuat_pada` DATETIME NULL,
   `transaction_id` VARCHAR(64) NULL,
   `snap_token` VARCHAR(100) NULL,
   `catatan` VARCHAR(200) NULL,
@@ -119,6 +123,7 @@ CREATE TABLE IF NOT EXISTS `pembayaran` (
   UNIQUE INDEX `uq_pembayaran_reservasi_lunas` (`lunas_key`),
   INDEX `idx_pembayaran_reservasi_status` (`id_reservasi`, `status`),
   INDEX `idx_pembayaran_status_dibayar` (`status`, `dibayar_pada`),
+  INDEX `idx_pembayaran_kode_va` (`bank_atau_toko`, `kode_pembayaran`),
   CONSTRAINT `fk_pembayaran_reservasi` FOREIGN KEY (`id_reservasi`) REFERENCES `reservasi` (`id_reservasi`) ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT `fk_pembayaran_dicatat` FOREIGN KEY (`dicatat_oleh`) REFERENCES `pengguna` (`id_pengguna`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_pembayaran_dibatalkan` FOREIGN KEY (`dibatalkan_oleh`) REFERENCES `pengguna` (`id_pengguna`) ON DELETE SET NULL ON UPDATE CASCADE
