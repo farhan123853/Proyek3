@@ -41,28 +41,14 @@ if (empty($signatureReceived) || !hash_equals($expectedSignature, $signatureRece
 $statusData = null;
 try {
     $statusObj = \Midtrans\Transaction::status($orderId);
-    $statusData = [
-        'transaction_status' => is_object($statusObj) ? ($statusObj->transaction_status ?? '') : ($statusObj['transaction_status'] ?? ''),
-        'fraud_status'       => is_object($statusObj) ? ($statusObj->fraud_status ?? null) : ($statusObj['fraud_status'] ?? null),
-        'payment_type'       => is_object($statusObj) ? ($statusObj->payment_type ?? '') : ($statusObj['payment_type'] ?? ''),
-        'transaction_id'     => is_object($statusObj) ? ($statusObj->transaction_id ?? null) : ($statusObj['transaction_id'] ?? null),
-        'settlement_time'    => is_object($statusObj) ? ($statusObj->settlement_time ?? null) : ($statusObj['settlement_time'] ?? null),
-        'gross_amount'       => is_object($statusObj) ? ($statusObj->gross_amount ?? null) : ($statusObj['gross_amount'] ?? null),
-    ];
+    $statusData = is_object($statusObj) ? json_decode(json_encode($statusObj), true) : (array)$statusObj;
 } catch (\Exception $e) {
     // Sanitasi pesan log (hindari kebocoran kunci)
     $cleanMsg = preg_replace('/(SB-Mid-server-[a-zA-Z0-9_\-]+|Mid-server-[a-zA-Z0-9_\-]+)/', '***REDACTED***', $e->getMessage());
     error_log("Midtrans Transaction::status() info ({$orderId}): " . $cleanMsg . " - menggunakan data webhook terverifikasi SHA512");
 
     // Jika order buatan untuk pengujian lokal/sandbox, gunakan data webhook yang signature-nya sudah lolos verifikasi
-    $statusData = [
-        'transaction_status' => $body['transaction_status'] ?? '',
-        'fraud_status'       => $body['fraud_status'] ?? null,
-        'payment_type'       => $body['payment_type'] ?? 'bank_transfer',
-        'transaction_id'     => $body['transaction_id'] ?? ('TRX-' . time()),
-        'settlement_time'    => $body['settlement_time'] ?? date('Y-m-d H:i:s'),
-        'gross_amount'       => $grossAmount,
-    ];
+    $statusData = $body;
 }
 
 // 4, 5, 6, 7: Proses pembaruan status, validasi nominal & order_id, aturan idempoten, dan penanganan pembayaran ganda

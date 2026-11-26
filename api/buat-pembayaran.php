@@ -18,12 +18,16 @@ if (!is_logged_in() || current_user()['peran'] !== 'pelanggan') {
 
 // 3. Verifikasi CSRF token
 $csrfToken = $_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null;
+$jsonData = null;
 if (!$csrfToken) {
     $rawInput = file_get_contents('php://input');
     $jsonData = json_decode($rawInput, true);
     $csrfToken = $jsonData['csrf_token'] ?? null;
     if ($jsonData && isset($jsonData['id_reservasi'])) {
         $_POST['id_reservasi'] = $jsonData['id_reservasi'];
+    }
+    if ($jsonData && isset($jsonData['ganti_metode'])) {
+        $_POST['ganti_metode'] = $jsonData['ganti_metode'];
     }
 }
 
@@ -66,10 +70,11 @@ if ($stmt->fetch()) {
 
 $nominal = (int)round((float)$reservasi['estimasi_total']);
 $batasJam = (int)($config['PEMBAYARAN_BATAS_JAM'] ?? 24);
+$gantiMetode = !empty($_POST['ganti_metode']);
 
 // 7. Cek apakah ada transaksi Midtrans 'menunggu' yang masih aktif dalam rentang batas jam
 // Keputusan: jika ada snap_token aktif yang masih dalam rentang waktu berlaku, pakai ulang token
-// untuk efisiensi dan menghindari pembuatan order ganda di Midtrans
+// KECUALI jika pengguna secara eksplisit meminta 'ganti_metode' (misal ganti dari BCA ke BNI)
 $stmt = $db->prepare("
     SELECT id_pembayaran, order_id, snap_token, dibuat_pada
     FROM pembayaran
@@ -82,12 +87,36 @@ $stmt->execute([$idReservasi, $batasJam]);
 $existing = $stmt->fetch();
 
 if ($existing && !empty($existing['snap_token'])) {
-    json_response([
-        'ok' => true,
-        'token' => $existing['snap_token'],
-        'order_id' => $existing['order_id'],
-        'reused' => true
-    ]);
+    if (!$gantiMetode) {
+        json_response([
+            'ok' => true,
+            'token' => $existing['snap_token'],
+            'order_id' => $existing['order_id'],
+            'reused' => true
+        ]);
+    } else {
+        // Pengguna meminta ganti metode/bank:
+        // Batalkan/expire transaksi lama di server Midtrans jika memungkinkan
+        try {
+            \Midtrans\Config::$serverKey = $config['MIDTRANS_SERVER_KEY'] ?? '';
+            \Midtrans\Config::$isProduction = (bool)($config['MIDTRANS_IS_PRODUCTION'] ?? false);
+            \Midtrans\Transaction::cancel($existing['order_id']);
+        } catch (\Exception $e) {
+            try {
+                \Midtrans\Transaction::expire($existing['order_id']);
+            } catch (\Exception $ex) {
+                // Abaikan jika order belum terdaftar di Core API Midtrans
+            }
+        }
+        // Tandai transaksi lama sebagai 'kedaluwarsa' di database lokal
+        $stmtExpire = $db->prepare("
+            UPDATE pembayaran 
+            SET status = 'kedaluwarsa',
+                catatan = CONCAT(COALESCE(catatan, ''), CASE WHEN catatan IS NULL OR catatan = '' THEN '' ELSE ' | ' END, '[Diganti metode baru]')
+            WHERE id_pembayaran = ?
+        ");
+        $stmtExpire->execute([$existing['id_pembayaran']]);
+    }
 }
 
 // 8. Buat order_id baru: 'MSY-{id_reservasi}-{timestamp}' (panjang <= 50 karakter)

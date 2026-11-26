@@ -552,6 +552,262 @@ function petakan_status_midtrans(string $transactionStatus, ?string $fraudStatus
 }
 
 /**
+ * Ekstrak data Virtual Account (VA) atau kode pembayaran dari respons Midtrans
+ * Menangani:
+ * - standard VA: va_numbers (BCA, BNI, BRI, CIMB, dll.)
+ * - Mandiri Bill: payment_type = 'echannel' (biller_code / bill_key)
+ * - Permata VA: permata_va_number
+ * - Minimarket: payment_type = 'cstore' (store, payment_code)
+ * - Expiry: expiry_time
+ */
+function ekstrak_data_va_midtrans($statusData): array
+{
+    if (is_object($statusData)) {
+        $statusData = json_decode(json_encode($statusData), true);
+    }
+    if (!is_array($statusData)) {
+        return [
+            'bank_atau_toko'   => null,
+            'kode_pembayaran'  => null,
+            'kedaluwarsa_pada' => null,
+        ];
+    }
+
+    $bankAtauToko = null;
+    $kodePembayaran = null;
+    $kedaluwarsaPada = null;
+
+    $paymentType = strtolower((string)($statusData['payment_type'] ?? ''));
+
+    // 1. Standard VA (va_numbers)
+    if (!empty($statusData['va_numbers']) && is_array($statusData['va_numbers'])) {
+        $firstVa = reset($statusData['va_numbers']);
+        if (is_array($firstVa)) {
+            $bankAtauToko = strtolower((string)($firstVa['bank'] ?? ''));
+            $kodePembayaran = trim((string)($firstVa['va_number'] ?? ''));
+        }
+    }
+
+    // 2. Mandiri Bill (echannel)
+    if ((empty($kodePembayaran) || $paymentType === 'echannel') && (!empty($statusData['bill_key']) || !empty($statusData['biller_code']))) {
+        $bankAtauToko = 'mandiri';
+        $billerCode = trim((string)($statusData['biller_code'] ?? ''));
+        $billKey = trim((string)($statusData['bill_key'] ?? ''));
+        if ($billerCode !== '' && $billKey !== '') {
+            $kodePembayaran = $billerCode . ' / ' . $billKey;
+        } elseif ($billKey !== '') {
+            $kodePembayaran = $billKey;
+        }
+    }
+
+    // 3. Permata VA
+    if (empty($kodePembayaran) && !empty($statusData['permata_va_number'])) {
+        $bankAtauToko = 'permata';
+        $kodePembayaran = trim((string)$statusData['permata_va_number']);
+    }
+
+    // 4. Minimarket / Convenience Store (cstore)
+    if ((empty($kodePembayaran) || $paymentType === 'cstore') && !empty($statusData['payment_code'])) {
+        $bankAtauToko = strtolower((string)($statusData['store'] ?? 'cstore'));
+        $kodePembayaran = trim((string)$statusData['payment_code']);
+    }
+
+    // 5. Expiry time
+    if (!empty($statusData['expiry_time'])) {
+        $ts = strtotime((string)$statusData['expiry_time']);
+        if ($ts !== false) {
+            $kedaluwarsaPada = date('Y-m-d H:i:s', $ts);
+        }
+    }
+
+    return [
+        'bank_atau_toko'   => $bankAtauToko ?: null,
+        'kode_pembayaran'  => $kodePembayaran ?: null,
+        'kedaluwarsa_pada' => $kedaluwarsaPada ?: null,
+    ];
+}
+
+/**
+ * Cek apakah ada pembayaran 'menunggu' lain dengan bank_atau_toko dan kode_pembayaran yang sama
+ */
+function cek_duplikat_kode(PDO $db, string $bankAtauToko, string $kodePembayaran, string $orderIdSaatIni): ?array
+{
+    if (empty($bankAtauToko) || empty($kodePembayaran)) {
+        return null;
+    }
+    $stmt = $db->prepare("
+        SELECT id_pembayaran, order_id, id_reservasi, status, dibuat_pada
+        FROM pembayaran
+        WHERE bank_atau_toko = ?
+          AND kode_pembayaran = ?
+          AND status = 'menunggu'
+          AND order_id != ?
+        LIMIT 1
+    ");
+    $stmt->execute([$bankAtauToko, $kodePembayaran, $orderIdSaatIni]);
+    $dup = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($dup) {
+        error_log("PERINGATAN DUPLIKAT KODE VA: {$bankAtauToko} {$kodePembayaran} sudah aktif di order {$dup['order_id']} saat diproses untuk {$orderIdSaatIni}");
+        return $dup;
+    }
+    return null;
+}
+
+/**
+ * Format nama bank atau toko untuk tampilan manusia
+ */
+function format_bank_atau_toko(?string $bankAtauToko): string
+{
+    if (empty($bankAtauToko)) {
+        return '-';
+    }
+    $key = strtolower(trim($bankAtauToko));
+    $map = [
+        'bca'        => 'Bank BCA',
+        'bni'        => 'Bank BNI',
+        'bri'        => 'Bank BRI',
+        'mandiri'    => 'Bank Mandiri',
+        'permata'    => 'Bank Permata',
+        'cimb'       => 'Bank CIMB Niaga',
+        'indomaret'  => 'Indomaret',
+        'alfamart'   => 'Alfamart',
+        'gopay'      => 'GoPay',
+        'shopeepay'  => 'ShopeePay',
+        'qris'       => 'QRIS',
+    ];
+    return $map[$key] ?? strtoupper($bankAtauToko);
+}
+
+/**
+ * Format nomor VA dengan spasi per 4 digit agar mudah dibaca pengguna
+ * Khusus echannel Mandiri (biller_code / bill_key) tetap diformat terpisah.
+ */
+function format_nomor_va(?string $kode, ?string $bankAtauToko = null): string
+{
+    if (empty($kode)) {
+        return '-';
+    }
+    $kode = trim($kode);
+    if (strpos($kode, '/') !== false) {
+        return $kode;
+    }
+    if (preg_match('/^[0-9A-Za-z]+$/', $kode)) {
+        return trim(chunk_split($kode, 4, ' '));
+    }
+    return $kode;
+}
+
+/**
+ * Samarkan kode pembayaran: tampilkan hanya 4 karakter terakhir (••••4567)
+ */
+function samarkan_kode_pembayaran(?string $kode): string
+{
+    if (empty($kode)) {
+        return '-';
+    }
+    $clean = trim((string)$kode);
+    if (strpos($clean, '/') !== false) {
+        $parts = explode('/', $clean);
+        $lastPart = trim(end($parts));
+        $tail = mb_substr($lastPart, -4);
+        return '••••' . $tail;
+    }
+    if (mb_strlen($clean) <= 4) {
+        return $clean;
+    }
+    return '••••' . mb_substr($clean, -4);
+}
+
+/**
+ * Mengambil 3 langkah ringkas instruksi pembayaran per bank/toko dalam bahasa ID/EN
+ */
+function ambil_petunjuk_transfer(string $bankAtauToko, string $lang = 'id'): array
+{
+    $bank = strtolower(trim($bankAtauToko));
+    $isEn = ($lang === 'en');
+
+    $petunjuk = [
+        'bca' => $isEn ? [
+            'Open BCA mobile, KlikBCA, or BCA ATM, and choose Transfer > BCA Virtual Account.',
+            'Enter the Virtual Account number above and verify the recipient name & total amount.',
+            'Confirm the payment and keep your transaction receipt.',
+        ] : [
+            'Buka BCA mobile, KlikBCA, atau ATM BCA, lalu pilih Transfer > BCA Virtual Account.',
+            'Masukkan nomor Virtual Account di atas dan pastikan nama penerima & nominal sesuai.',
+            'Konfirmasi transaksi dan simpan bukti pembayaran Anda.',
+        ],
+        'bni' => $isEn ? [
+            'Open BNI Mobile Banking or BNI ATM, select Transfer > Virtual Account Billing.',
+            'Enter the BNI Virtual Account number shown above.',
+            'Review the billing details and enter your PIN to finish the transaction.',
+        ] : [
+            'Buka BNI Mobile Banking atau ATM BNI, pilih Transfer > Virtual Account Billing.',
+            'Masukkan nomor Virtual Account BNI yang tertera di atas.',
+            'Periksa rincian tagihan lalu masukkan PIN untuk menyelesaikan transaksi.',
+        ],
+        'bri' => $isEn ? [
+            'Open BRImo or BRI ATM, then choose Payment > BRIVA.',
+            'Enter the BRIVA number and verify that customer name and bill match.',
+            'Confirm the payment and input your PIN.',
+        ] : [
+            'Buka BRImo atau ATM BRI, lalu pilih menu Pembayaran > BRIVA.',
+            'Masukkan nomor BRIVA dan periksa apakah nama pelanggan dan tagihan sesuai.',
+            'Konfirmasi pembayaran dan masukkan PIN Anda.',
+        ],
+        'mandiri' => $isEn ? [
+            'Open Livin\' by Mandiri or ATM, choose Pay > Multipayment or Virtual Account.',
+            'Enter Company/Biller Code and Payment Number / Bill Key above.',
+            'Check the billing details and complete the transaction.',
+        ] : [
+            'Buka Livin\' by Mandiri atau ATM, pilih Bayar > Multipayment atau Virtual Account.',
+            'Masukkan Kode Perusahaan/Biller Code dan Nomor Pembayaran / Bill Key di atas.',
+            'Periksa rincian tagihan dan selesaikan transaksi.',
+        ],
+        'permata' => $isEn ? [
+            'Open PermataMobile X or Permata ATM, select Payment > Virtual Account.',
+            'Enter the Permata Virtual Account number shown above.',
+            'Verify the total amount and complete the payment.',
+        ] : [
+            'Buka PermataMobile X atau ATM Permata, pilih Pembayaran > Virtual Account.',
+            'Masukkan nomor Permata Virtual Account yang tertera di atas.',
+            'Periksa nominal tagihan dan selesaikan pembayaran.',
+        ],
+        'indomaret' => $isEn ? [
+            'Visit the nearest Indomaret store and tell the cashier you want to pay a booking bill.',
+            'Show the payment code above to the cashier.',
+            'Pay the exact amount and keep the official receipt from the cashier.',
+        ] : [
+            'Datangi gerai Indomaret terdekat dan sampaikan ke kasir pembayaran pemesanan.',
+            'Tunjukkan kode pembayaran di atas kepada kasir.',
+            'Bayar sesuai nominal pas dan simpan struk resmi dari kasir.',
+        ],
+        'alfamart' => $isEn ? [
+            'Visit the nearest Alfamart / Alfamidi store and go to the cashier counter.',
+            'Provide the payment code above to the cashier.',
+            'Pay the required amount and keep your official payment receipt.',
+        ] : [
+            'Datangi kasir gerai Alfamart / Alfamidi terdekat.',
+            'Berikan kode pembayaran yang tertera di atas kepada kasir.',
+            'Bayar sesuai nominal tagihan dan simpan bukti transaksi resmi.',
+        ],
+    ];
+
+    if (isset($petunjuk[$bank])) {
+        return $petunjuk[$bank];
+    }
+
+    return $isEn ? [
+        'Open your mobile banking or e-wallet application.',
+        'Choose transfer or payment to the Virtual Account / Code shown above.',
+        'Verify the booking details, pay the exact amount, and save your receipt.',
+    ] : [
+        'Buka aplikasi mobile banking atau e-wallet pilihan Anda.',
+        'Pilih menu transfer atau pembayaran ke Virtual Account / Kode di atas.',
+        'Pastikan detail pemesanan sesuai, selesaikan pembayaran, dan simpan buktinya.',
+    ];
+}
+
+/**
  * Proses pembaruan status pembayaran dari payload/objek Midtrans secara idempoten dan aman
  */
 function proses_status_transaksi_midtrans(string $orderId, array $statusData): array
@@ -566,17 +822,28 @@ function proses_status_transaksi_midtrans(string $orderId, array $statusData): a
     $settlementTime = $statusData['settlement_time'] ?? null;
     $grossAmount = $statusData['gross_amount'] ?? null;
 
+    $vaData = ekstrak_data_va_midtrans($statusData);
+    $bankAtauToko = $vaData['bank_atau_toko'];
+    $kodePembayaran = $vaData['kode_pembayaran'];
+    $kedaluwarsaPada = $vaData['kedaluwarsa_pada'];
+
     $statusInternal = petakan_status_midtrans($transactionStatus, $fraudStatus);
 
-    $db->beginTransaction();
+    $startedTx = false;
+    if (!$db->inTransaction()) {
+        $db->beginTransaction();
+        $startedTx = true;
+    }
     try {
         // 1. Kunci dan validasi baris pembayaran
-        $stmtP = $db->prepare("SELECT id_pembayaran, id_reservasi, order_id, sumber, jumlah, status FROM pembayaran WHERE order_id = ? FOR UPDATE");
+        $stmtP = $db->prepare("SELECT id_pembayaran, id_reservasi, order_id, sumber, jumlah, status, bank_atau_toko, kode_pembayaran FROM pembayaran WHERE order_id = ? FOR UPDATE");
         $stmtP->execute([$orderId]);
-        $currP = $stmtP->fetch();
+        $currP = $stmtP->fetch(PDO::FETCH_ASSOC);
 
         if (!$currP) {
-            $db->rollBack();
+            if ($startedTx && $db->inTransaction()) {
+                $db->rollBack();
+            }
             return ['ok' => false, 'pesan' => 'Order ID tidak ditemukan di basis data', 'http_code' => 400];
         }
 
@@ -585,7 +852,9 @@ function proses_status_transaksi_midtrans(string $orderId, array $statusData): a
             $nominalExpected = (int)$currP['jumlah'];
             $nominalReceived = (int)round((float)$grossAmount);
             if ($nominalExpected !== $nominalReceived) {
-                $db->rollBack();
+                if ($startedTx && $db->inTransaction()) {
+                    $db->rollBack();
+                }
                 error_log("Validasi nominal gagal pada {$orderId}: diharapkan {$nominalExpected}, diterima {$nominalReceived}");
                 return ['ok' => false, 'pesan' => 'Nominal transaksi tidak cocok dengan database', 'http_code' => 400];
             }
@@ -594,12 +863,59 @@ function proses_status_transaksi_midtrans(string $orderId, array $statusData): a
         // 3. Kunci baris reservasi terkait
         $stmtR = $db->prepare("SELECT id_reservasi, status FROM reservasi WHERE id_reservasi = ? FOR UPDATE");
         $stmtR->execute([$currP['id_reservasi']]);
-        $reservasi = $stmtR->fetch();
+        $reservasi = $stmtR->fetch(PDO::FETCH_ASSOC);
+
+        // Cek duplikasi kode VA aktif
+        $catatanTambahan = null;
+        if ($statusInternal === 'menunggu' && !empty($bankAtauToko) && !empty($kodePembayaran)) {
+            $dup = cek_duplikat_kode($db, $bankAtauToko, $kodePembayaran, $orderId);
+            if ($dup) {
+                $catatanTambahan = "perlu ditinjau: duplikat kode VA dengan " . $dup['order_id'];
+            }
+        }
 
         // 4. Idempotensi: jika baris pembayaran ini SUDAH 'lunas', jangan turunkan statusnya
         if ($currP['status'] === 'lunas') {
-            $db->commit();
-            return ['ok' => true, 'status' => 'lunas', 'pesan' => 'Pembayaran sudah lunas (idempoten)', 'http_code' => 200];
+            if (!empty($bankAtauToko) || !empty($kodePembayaran) || !empty($kedaluwarsaPada)) {
+                $stmtUpdateVa = $db->prepare("
+                    UPDATE pembayaran
+                    SET bank_atau_toko = COALESCE(?, bank_atau_toko),
+                        kode_pembayaran = COALESCE(?, kode_pembayaran),
+                        kedaluwarsa_pada = COALESCE(?, kedaluwarsa_pada),
+                        kode_dibuat_pada = CASE WHEN kode_dibuat_pada IS NOT NULL THEN kode_dibuat_pada WHEN ? IS NOT NULL THEN NOW() ELSE NULL END
+                    WHERE id_pembayaran = ?
+                ");
+                $stmtUpdateVa->execute([$bankAtauToko, $kodePembayaran, $kedaluwarsaPada, $kodePembayaran, $currP['id_pembayaran']]);
+            }
+
+            $stmtFresh = $db->prepare("SELECT * FROM pembayaran WHERE id_pembayaran = ? LIMIT 1");
+            $stmtFresh->execute([$currP['id_pembayaran']]);
+            $fresh = $stmtFresh->fetch(PDO::FETCH_ASSOC);
+
+            if ($startedTx && $db->inTransaction()) {
+                $db->commit();
+            }
+            return [
+                'ok' => true,
+                'status' => 'lunas',
+                'pesan' => 'Pembayaran sudah lunas (idempoten)',
+                'http_code' => 200,
+                'data' => [
+                    'id_pembayaran'        => (int)$fresh['id_pembayaran'],
+                    'id_reservasi'         => (int)$fresh['id_reservasi'],
+                    'order_id'             => $fresh['order_id'],
+                    'status'               => 'lunas',
+                    'bank_atau_toko'       => $fresh['bank_atau_toko'] ?? null,
+                    'bank_atau_toko_label' => format_bank_atau_toko($fresh['bank_atau_toko'] ?? null),
+                    'kode_pembayaran'      => $fresh['kode_pembayaran'] ?? null,
+                    'kode_pembayaran_fmt'  => format_nomor_va($fresh['kode_pembayaran'] ?? null, $fresh['bank_atau_toko'] ?? null),
+                    'kode_pembayaran_mask' => samarkan_kode_pembayaran($fresh['kode_pembayaran'] ?? null),
+                    'kedaluwarsa_pada'     => $fresh['kedaluwarsa_pada'] ?? null,
+                    'kedaluwarsa_pada_fmt' => !empty($fresh['kedaluwarsa_pada']) ? date('d/m/Y H:i', strtotime($fresh['kedaluwarsa_pada'])) . ' WIB' : null,
+                    'is_lunas'             => true,
+                    'is_menunggu'          => false,
+                ]
+            ];
         }
 
         // 5. Kasus status baru adalah 'lunas'
@@ -612,7 +928,7 @@ function proses_status_transaksi_midtrans(string $orderId, array $statusData): a
                 LIMIT 1
             ");
             $stmtLunasLain->execute([$currP['id_reservasi'], $currP['id_pembayaran']]);
-            $lunasLain = $stmtLunasLain->fetch();
+            $lunasLain = $stmtLunasLain->fetch(PDO::FETCH_ASSOC);
 
             $metodeKelompok = kelompok_metode($paymentType);
             $dibayarPada = $settlementTime ? date('Y-m-d H:i:s', strtotime($settlementTime)) : date('Y-m-d H:i:s');
@@ -627,14 +943,16 @@ function proses_status_transaksi_midtrans(string $orderId, array $statusData): a
                         metode_kelompok = ?,
                         metode_detail = ?,
                         transaction_id = ?,
+                        bank_atau_toko = COALESCE(?, bank_atau_toko),
+                        kode_pembayaran = COALESCE(?, kode_pembayaran),
+                        kedaluwarsa_pada = COALESCE(?, kedaluwarsa_pada),
+                        kode_dibuat_pada = CASE WHEN kode_dibuat_pada IS NOT NULL THEN kode_dibuat_pada WHEN ? IS NOT NULL THEN NOW() ELSE NULL END,
                         catatan = ?,
                         dibayar_pada = ?
                     WHERE id_pembayaran = ?
                 ");
-                $stmtUpdate->execute([$metodeKelompok, $paymentType, $transactionId, $catatanGanda, $dibayarPada, $currP['id_pembayaran']]);
+                $stmtUpdate->execute([$metodeKelompok, $paymentType, $transactionId, $bankAtauToko, $kodePembayaran, $kedaluwarsaPada, $kodePembayaran, $catatanGanda, $dibayarPada, $currP['id_pembayaran']]);
                 error_log("PERINGATAN PEMBAYARAN GANDA: order_id {$orderId} tiba saat reservasi {$currP['id_reservasi']} sudah lunas.");
-                $db->commit();
-                return ['ok' => true, 'status' => 'ganda', 'pesan' => 'Pembayaran ganda terdeteksi (perlu ditinjau)', 'http_code' => 200];
             } else {
                 // Pembayaran lunas pertama yang sah
                 $stmtUpdate = $db->prepare("
@@ -643,33 +961,89 @@ function proses_status_transaksi_midtrans(string $orderId, array $statusData): a
                         metode_kelompok = ?,
                         metode_detail = ?,
                         transaction_id = ?,
+                        bank_atau_toko = COALESCE(?, bank_atau_toko),
+                        kode_pembayaran = COALESCE(?, kode_pembayaran),
+                        kedaluwarsa_pada = COALESCE(?, kedaluwarsa_pada),
+                        kode_dibuat_pada = CASE WHEN kode_dibuat_pada IS NOT NULL THEN kode_dibuat_pada WHEN ? IS NOT NULL THEN NOW() ELSE NULL END,
                         dibayar_pada = ?
                     WHERE id_pembayaran = ?
                 ");
-                $stmtUpdate->execute([$metodeKelompok, $paymentType, $transactionId, $dibayarPada, $currP['id_pembayaran']]);
-                $db->commit();
-                return ['ok' => true, 'status' => 'lunas', 'pesan' => 'Pembayaran berhasil dikonfirmasi lunas', 'http_code' => 200];
+                $stmtUpdate->execute([$metodeKelompok, $paymentType, $transactionId, $bankAtauToko, $kodePembayaran, $kedaluwarsaPada, $kodePembayaran, $dibayarPada, $currP['id_pembayaran']]);
             }
         } else {
             // Status non-lunas ('menunggu', 'kedaluwarsa', 'gagal')
             // Jangan mengubah status jika sudah 'lunas' atau 'ganda'
             if (!in_array($currP['status'], ['lunas', 'ganda'], true)) {
                 $metodeKelompok = !empty($paymentType) ? kelompok_metode($paymentType) : null;
+                $sqlCatatan = "catatan";
+                $paramsUpdate = [
+                    $statusInternal,
+                    $metodeKelompok,
+                    $paymentType,
+                    $transactionId,
+                    $bankAtauToko,
+                    $kodePembayaran,
+                    $kedaluwarsaPada,
+                    $kodePembayaran,
+                ];
+                if ($catatanTambahan) {
+                    $sqlCatatan = "CASE WHEN catatan IS NULL OR catatan = '' THEN ? ELSE CONCAT(catatan, ' | ', ?) END";
+                    $paramsUpdate[] = $catatanTambahan;
+                    $paramsUpdate[] = $catatanTambahan;
+                }
+                $paramsUpdate[] = $currP['id_pembayaran'];
+
                 $stmtUpdate = $db->prepare("
                     UPDATE pembayaran 
                     SET status = ?,
                         metode_kelompok = COALESCE(?, metode_kelompok),
                         metode_detail = COALESCE(?, metode_detail),
-                        transaction_id = COALESCE(?, transaction_id)
+                        transaction_id = COALESCE(?, transaction_id),
+                        bank_atau_toko = COALESCE(?, bank_atau_toko),
+                        kode_pembayaran = COALESCE(?, kode_pembayaran),
+                        kedaluwarsa_pada = COALESCE(?, kedaluwarsa_pada),
+                        kode_dibuat_pada = CASE WHEN kode_dibuat_pada IS NOT NULL THEN kode_dibuat_pada WHEN ? IS NOT NULL THEN NOW() ELSE NULL END,
+                        catatan = {$sqlCatatan}
                     WHERE id_pembayaran = ?
                 ");
-                $stmtUpdate->execute([$statusInternal, $metodeKelompok, $paymentType, $transactionId, $currP['id_pembayaran']]);
+                $stmtUpdate->execute($paramsUpdate);
             }
-            $db->commit();
-            return ['ok' => true, 'status' => $statusInternal, 'pesan' => 'Status pembayaran: ' . $statusInternal, 'http_code' => 200];
         }
+
+        $stmtFresh = $db->prepare("SELECT * FROM pembayaran WHERE id_pembayaran = ? LIMIT 1");
+        $stmtFresh->execute([$currP['id_pembayaran']]);
+        $fresh = $stmtFresh->fetch(PDO::FETCH_ASSOC);
+
+        if ($startedTx && $db->inTransaction()) {
+            $db->commit();
+        }
+
+        $curStatus = $fresh['status'] ?? $statusInternal;
+        return [
+            'ok' => true,
+            'status' => $curStatus,
+            'pesan' => 'Status pembayaran: ' . $curStatus,
+            'http_code' => 200,
+            'data' => [
+                'id_pembayaran'        => (int)($fresh['id_pembayaran'] ?? $currP['id_pembayaran']),
+                'id_reservasi'         => (int)($fresh['id_reservasi'] ?? $currP['id_reservasi']),
+                'order_id'             => $fresh['order_id'] ?? $orderId,
+                'status'               => $curStatus,
+                'bank_atau_toko'       => $fresh['bank_atau_toko'] ?? null,
+                'bank_atau_toko_label' => format_bank_atau_toko($fresh['bank_atau_toko'] ?? null),
+                'kode_pembayaran'      => $fresh['kode_pembayaran'] ?? null,
+                'kode_pembayaran_fmt'  => format_nomor_va($fresh['kode_pembayaran'] ?? null, $fresh['bank_atau_toko'] ?? null),
+                'kode_pembayaran_mask' => samarkan_kode_pembayaran($fresh['kode_pembayaran'] ?? null),
+                'kedaluwarsa_pada'     => $fresh['kedaluwarsa_pada'] ?? null,
+                'kedaluwarsa_pada_fmt' => !empty($fresh['kedaluwarsa_pada']) ? date('d/m/Y H:i', strtotime($fresh['kedaluwarsa_pada'])) . ' WIB' : null,
+                'is_lunas'             => $curStatus === 'lunas',
+                'is_menunggu'          => $curStatus === 'menunggu',
+            ]
+        ];
     } catch (\Exception $e) {
-        $db->rollBack();
+        if ($startedTx && $db->inTransaction()) {
+            $db->rollBack();
+        }
         error_log("Kesalahan basis data saat update status pembayaran {$orderId}: " . $e->getMessage());
         return ['ok' => false, 'pesan' => 'Terjadi kesalahan basis data internal', 'http_code' => 500];
     }
@@ -693,12 +1067,58 @@ function sinkron_pembayaran(string $orderId): array
     }
 
     if ($pembayaran['sumber'] !== 'midtrans') {
-        return ['ok' => true, 'status' => $pembayaran['status'], 'pesan' => 'Bukan transaksi Midtrans (manual)', 'http_code' => 200];
+        $stmtFull = $db->prepare("SELECT * FROM pembayaran WHERE id_pembayaran = ? LIMIT 1");
+        $stmtFull->execute([$pembayaran['id_pembayaran']]);
+        $fresh = $stmtFull->fetch(PDO::FETCH_ASSOC);
+        return [
+            'ok' => true,
+            'status' => $pembayaran['status'],
+            'pesan' => 'Bukan transaksi Midtrans (manual)',
+            'http_code' => 200,
+            'data' => [
+                'id_pembayaran'        => (int)$fresh['id_pembayaran'],
+                'id_reservasi'         => (int)$fresh['id_reservasi'],
+                'order_id'             => $fresh['order_id'],
+                'status'               => $fresh['status'],
+                'bank_atau_toko'       => $fresh['bank_atau_toko'] ?? null,
+                'bank_atau_toko_label' => format_bank_atau_toko($fresh['bank_atau_toko'] ?? null),
+                'kode_pembayaran'      => $fresh['kode_pembayaran'] ?? null,
+                'kode_pembayaran_fmt'  => format_nomor_va($fresh['kode_pembayaran'] ?? null, $fresh['bank_atau_toko'] ?? null),
+                'kode_pembayaran_mask' => samarkan_kode_pembayaran($fresh['kode_pembayaran'] ?? null),
+                'kedaluwarsa_pada'     => $fresh['kedaluwarsa_pada'] ?? null,
+                'kedaluwarsa_pada_fmt' => !empty($fresh['kedaluwarsa_pada']) ? date('d/m/Y H:i', strtotime($fresh['kedaluwarsa_pada'])) . ' WIB' : null,
+                'is_lunas'             => $fresh['status'] === 'lunas',
+                'is_menunggu'          => $fresh['status'] === 'menunggu',
+            ]
+        ];
     }
 
     // Jika sudah lunas, tidak perlu melakukan panggilan jaringan ulang (idempoten & hemat kuota)
     if ($pembayaran['status'] === 'lunas') {
-        return ['ok' => true, 'status' => 'lunas', 'pesan' => 'Pembayaran sudah berstatus lunas', 'http_code' => 200];
+        $stmtFull = $db->prepare("SELECT * FROM pembayaran WHERE id_pembayaran = ? LIMIT 1");
+        $stmtFull->execute([$pembayaran['id_pembayaran']]);
+        $fresh = $stmtFull->fetch(PDO::FETCH_ASSOC);
+        return [
+            'ok' => true,
+            'status' => 'lunas',
+            'pesan' => 'Pembayaran sudah berstatus lunas',
+            'http_code' => 200,
+            'data' => [
+                'id_pembayaran'        => (int)$fresh['id_pembayaran'],
+                'id_reservasi'         => (int)$fresh['id_reservasi'],
+                'order_id'             => $fresh['order_id'],
+                'status'               => 'lunas',
+                'bank_atau_toko'       => $fresh['bank_atau_toko'] ?? null,
+                'bank_atau_toko_label' => format_bank_atau_toko($fresh['bank_atau_toko'] ?? null),
+                'kode_pembayaran'      => $fresh['kode_pembayaran'] ?? null,
+                'kode_pembayaran_fmt'  => format_nomor_va($fresh['kode_pembayaran'] ?? null, $fresh['bank_atau_toko'] ?? null),
+                'kode_pembayaran_mask' => samarkan_kode_pembayaran($fresh['kode_pembayaran'] ?? null),
+                'kedaluwarsa_pada'     => $fresh['kedaluwarsa_pada'] ?? null,
+                'kedaluwarsa_pada_fmt' => !empty($fresh['kedaluwarsa_pada']) ? date('d/m/Y H:i', strtotime($fresh['kedaluwarsa_pada'])) . ' WIB' : null,
+                'is_lunas'             => true,
+                'is_menunggu'          => false,
+            ]
+        ];
     }
 
     // 2. Hubungi API Midtrans
@@ -713,14 +1133,7 @@ function sinkron_pembayaran(string $orderId): array
         return ['ok' => false, 'pesan' => 'Gagal menghubungi server Midtrans: ' . $cleanMsg, 'http_code' => 502];
     }
 
-    $statusData = [
-        'transaction_status' => is_object($statusObj) ? ($statusObj->transaction_status ?? '') : ($statusObj['transaction_status'] ?? ''),
-        'fraud_status'       => is_object($statusObj) ? ($statusObj->fraud_status ?? null) : ($statusObj['fraud_status'] ?? null),
-        'payment_type'       => is_object($statusObj) ? ($statusObj->payment_type ?? '') : ($statusObj['payment_type'] ?? ''),
-        'transaction_id'     => is_object($statusObj) ? ($statusObj->transaction_id ?? null) : ($statusObj['transaction_id'] ?? null),
-        'settlement_time'    => is_object($statusObj) ? ($statusObj->settlement_time ?? null) : ($statusObj['settlement_time'] ?? null),
-        'gross_amount'       => is_object($statusObj) ? ($statusObj->gross_amount ?? null) : ($statusObj['gross_amount'] ?? null),
-    ];
+    $statusData = is_object($statusObj) ? json_decode(json_encode($statusObj), true) : (array)$statusObj;
 
     return proses_status_transaksi_midtrans($orderId, $statusData);
 }
