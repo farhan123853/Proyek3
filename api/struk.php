@@ -26,9 +26,6 @@ $db = get_db();
 $userRole = current_role();
 $userId = (int)current_user_id();
 $isStaff = in_array($userRole, ['admin', 'pengelola', 'pemilik'], true);
-// Full unmasked VA code is visible to admin, pengelola, and the reservation owner.
-// Pemilik (owner) is read-only and sees masked code.
-$canSeeUnmaskedVa = in_array($userRole, ['admin', 'pengelola'], true) || ((int)($resv['id_pelanggan'] ?? 0) === $userId);
 
 // 4. Ambil data reservasi
 $stmtResv = $db->prepare("
@@ -55,6 +52,10 @@ if (!$resv) {
 if (!$isStaff && (int)$resv['id_pelanggan'] !== $userId) {
     json_response(['ok' => false, 'pesan' => t('payment.not_found')], 404);
 }
+
+// Full unmasked VA code is visible to admin, pengelola, and the reservation owner.
+// Pemilik (owner) is read-only and sees masked code.
+$canSeeUnmaskedVa = in_array($userRole, ['admin', 'pengelola'], true) || ((int)($resv['id_pelanggan'] ?? 0) === $userId);
 
 // 6. Ambil semua baris pembayaran terkait
 $stmtBayar = $db->prepare("
@@ -126,7 +127,7 @@ if ($pembayaranUtama) {
         'kode_pembayaran_mask' => samarkan_kode_pembayaran($rawKode),
         'kedaluwarsa_pada' => $pembayaranUtama['kedaluwarsa_pada'] ?? null,
         'kedaluwarsa_pada_fmt' => !empty($pembayaranUtama['kedaluwarsa_pada']) ? date('d/m/Y H:i', strtotime($pembayaranUtama['kedaluwarsa_pada'])) . ' WIB' : null,
-        'petunjuk_transfer' => !empty($pembayaranUtama['bank_atau_toko']) ? ambil_petunjuk_transfer($pembayaranUtama['bank_atau_toko'], current_lang()) : [],
+        'petunjuk_transfer' => !empty($pembayaranUtama['bank_atau_toko']) ? ambil_petunjuk_transfer($pembayaranUtama['bank_atau_toko'], get_active_lang()) : [],
         'jumlah' => (int)($pembayaranUtama['jumlah'] ?? 0),
         'jumlah_fmt' => format_rupiah($pembayaranUtama['jumlah'] ?? 0),
         'dibayar_pada' => $pembayaranUtama['dibayar_pada'],
@@ -173,7 +174,7 @@ foreach ($allPayments as $pb) {
 
 // WhatsApp link generator (bilingual berdasarkan preferensi bahasa atau sistem)
 $cleanWa = preg_replace('/^0/', '62', preg_replace('/[^\d]/', '', $guestContact));
-$tamuLang = $resv['bahasa'] ?? current_lang();
+$tamuLang = $resv['bahasa'] ?? get_active_lang();
 $isTamuEn = ($tamuLang === 'en');
 
 if ($isLunas) {
@@ -183,9 +184,9 @@ if ($isLunas) {
         $waText = "Halo Bapak/Ibu {$guestName},\nBerikut bukti pembayaran resmi untuk reservasi *#RSV-{$id}* ({$resv['nama_villa']}):\nStatus: *LUNAS*\nTotal: " . format_rupiah($resv['estimasi_total']) . "\nMetode: " . ($payData['metode_label'] ?? 'Tunai') . "\nWaktu: " . ($payData['dibayar_pada_fmt'] ?? '-') . "\n\nTerima kasih atas kepercayaannya di Villa Joglo Masayu.";
     }
 } else {
-    $bankInfo = !empty($payData['bank_atau_toko_label']) && $payData['bank_atau_toko_label'] !== '-' ? $payData['bank_atau_toko_label'] : 'Transfer Bank';
-    $kodeVaInfo = !empty($payData['kode_pembayaran']) ? $payData['kode_pembayaran'] : '-';
-    $deadlineInfo = !empty($payData['kedaluwarsa_pada_fmt']) ? $payData['kedaluwarsa_pada_fmt'] : date('d/m/Y H:i', strtotime('+24 hours')) . ' WIB';
+    $bankInfo = (!empty($payData) && !empty($payData['bank_atau_toko_label']) && $payData['bank_atau_toko_label'] !== '-') ? $payData['bank_atau_toko_label'] : 'Transfer Bank';
+    $kodeVaInfo = (!empty($payData) && !empty($payData['kode_pembayaran'])) ? $payData['kode_pembayaran'] : '-';
+    $deadlineInfo = (!empty($payData) && !empty($payData['kedaluwarsa_pada_fmt'])) ? $payData['kedaluwarsa_pada_fmt'] : date('d/m/Y H:i', strtotime('+24 hours')) . ' WIB';
 
     if ($isTamuEn) {
         $waText = "Hello {$guestName},\nYour reservation *#RSV-{$id}* ({$resv['nama_villa']}) has been confirmed and is awaiting payment.\nTotal Amount: *" . format_rupiah($resv['estimasi_total']) . "*\nBank/Method: {$bankInfo}\nVA Code: *{$kodeVaInfo}*\nPayment Deadline: {$deadlineInfo}\n\nPlease complete your transfer before the deadline. Thank you.";

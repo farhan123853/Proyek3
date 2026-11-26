@@ -80,6 +80,14 @@ function get_active_lang(): string
 }
 
 /**
+ * Alias untuk get_active_lang()
+ */
+function current_lang(): string
+{
+    return get_active_lang();
+}
+
+/**
  * Fungsi translasi string berdasar kamus dwibahasa
  */
 function t(string $key, array $params = []): string

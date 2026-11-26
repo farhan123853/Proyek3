@@ -289,7 +289,7 @@ require_once __DIR__ . '/includes/layout/head.php';
 
                     <!-- Panduan 3 Langkah Transfer -->
                     <?php
-                      $steps = ambil_petunjuk_transfer($pembayaranAktif['bank_atau_toko'] ?? '', current_lang());
+                      $steps = ambil_petunjuk_transfer($pembayaranAktif['bank_atau_toko'] ?? '', get_active_lang());
                     ?>
                     <div class="mt-3 pt-2.5 border-t border-amber-200/60">
                       <div class="text-[11px] font-bold uppercase tracking-wider text-stone-700 mb-1.5"><?= t('payment.how_to_pay') ?>:</div>
@@ -318,7 +318,7 @@ require_once __DIR__ . '/includes/layout/head.php';
                         $kodeVa = $pembayaranAktif['kode_pembayaran'];
                         $nomFmt = format_rupiah($pembayaranAktif['jumlah']);
                         $batasStr = !empty($pembayaranAktif['kedaluwarsa_pada']) ? date('d/m/Y H:i', strtotime($pembayaranAktif['kedaluwarsa_pada'])) . ' WIB' : '-';
-                        $pesanWaVa = urlencode(current_lang() === 'en' 
+                        $pesanWaVa = urlencode(get_active_lang() === 'en' 
                           ? "Hello Joglo Masayu, I am confirming payment for reservation #RSV-{$idRes} ({$r['nama_villa']}). Method: {$bankFmt}, VA: {$kodeVa}, Amount: {$nomFmt}, Deadline: {$batasStr}."
                           : "Halo Pengelola Joglo Masayu, saya konfirmasi pembayaran reservasi #RSV-{$idRes} ({$r['nama_villa']}). Metode: {$bankFmt}, VA: {$kodeVa}, Nominal: {$nomFmt}, Batas: {$batasStr}."
                         );

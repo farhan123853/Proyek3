@@ -125,3 +125,38 @@ Fitur verifikasi email pelanggan dan login dengan Google Sign-In merupakan penam
    - Pelanggan yang belum memverifikasi email dibatasi untuk membuat reservasi villa baru (diarahkan ke pengaturan akun), namun akun lama tetap dapat login dan mengakses reservasi yang sudah dibuat.
    - Layanan pengiriman email menggunakan Google Apps Script webhook eksternal, dan Google Sign-In menggunakan Google Identity Services (GIS). Keduanya dirancang tidak memblokir aplikasi bila kredensial belum diisi (gagal rapi dengan pesan konfigurasi).
 
+---
+
+## 7. Penyelarasan Modul Virtual Account & Kode Pembayaran Unik (F-24 / Permintaan Dosen Pembimbing)
+
+### Latar Belakang & Kebutuhan:
+Sesuai arahan dosen pembimbing skripsi/proyek, setiap transaksi pembayaran non-tunai wajib memiliki kode Virtual Account (VA) yang unik, terlihat, dan tercatat dalam sistem basis data guna keperluan audit dan verifikasi rekonsiliasi perbankan.
+
+### Keputusan Arsitektur:
+- **Opsi Terpilih: Opsi 1 (Midtrans Snap Integrasi Penuh)**. Alur popup Midtrans Snap tetap dipertahankan. Nomor VA dan kode pembayaran resmi diterbitkan secara dinamis oleh Midtrans Payment API setelah pelanggan menentukan bank tujuan di antarmuka Snap.
+- Sistem menangkap nomor VA tersebut secara real-time melalui webhook notifikasi Midtrans (`notifikasi-midtrans.php`) dan sinkronisasi manual (`sinkron_pembayaran()`), lalu menyimpannya secara persisten pada tabel `pembayaran`.
+- **Tidak ada rekayasa nomor VA buatan sendiri** (tidak membuat pola nomor VA mandiri tanpa verifikasi perbankan) agar tetap tunduk pada spesifikasi standar perbankan Midtrans Core/Snap API.
+
+### Pembaruan Basis Data (Migrasi `005_virtual_account.sql`):
+1. **Entitas `pembayaran`**:
+   - `bank_atau_toko VARCHAR(50) NULL`: Menyimpan identitas penerbit pembayaran (misal: `bca`, `bni`, `bri`, `echannel`/mandiri, `permata`, `indomaret`, `alfamart`).
+   - `kode_pembayaran VARCHAR(100) NULL`: Nomor Virtual Account atau kode pembayaran unik dari Midtrans.
+   - `kedaluwarsa_pada DATETIME NULL`: Batas waktu pembayaran (zona WIB).
+   - `kode_dibuat_pada DATETIME NULL`: Waktu pencatatan kode pembayaran pertama kali.
+   - Indeks: `idx_pembayaran_kode_va (kode_pembayaran)` untuk optimalisasi pencarian dan pencegahan bentrok data.
+
+### Pembaruan Logika Bisnis & Antarmuka:
+1. **Helper Ekstraksi & Format (`includes/helpers.php`)**:
+   - `ekstrak_data_va_midtrans()`: Mengekstrak array respons Midtrans untuk berbagai format (`va_numbers`, `bill_key`/`biller_code` Mandiri, `permata_va_number`, `payment_code` cstore).
+   - `cek_duplikat_kode()`: Memeriksa dan menandai riwayat transaksi jika terdapat duplikasi kode pembayaran aktif antar-order berbeda.
+   - `samarkan_kode_pembayaran()`: Masking nomor VA (misal `••••4567`) setelah status transaksi `lunas` demi perlindungan privasi.
+   - `ambil_petunjuk_transfer()`: Menyediakan 3 langkah instruksi pembayaran bilingual (ID/EN) terstruktur berdasarkan bank yang dipilih.
+2. **Antarmuka Pelanggan (`reservasi-saya.php`)**:
+   - Menampilkan kartu kode pembayaran lengkap dengan countdown timer, tombol salin ke papan klip, tombol ganti metode pembayaran, dan tombol konfirmasi WhatsApp.
+3. **Antarmuka Pengelola & Administrator (`dashboard/pengelola.php`, `dashboard/admin.php`, `struk-pembayaran.php`)**:
+   - Menyediakan kolom pencarian multi-kriteria berbasis nomor VA, Order ID, dan nama tamu.
+   - Menampilkan riwayat percobaan pembayaran per reservasi tanpa risiko overcounting pemasukan.
+4. **Pembaruan Pengujian (Tabel 4.2 / `docs/RENCANA_UJI.md`)**:
+   - Penambahan skenario uji **T-76 s.d. T-83** yang mencakup keunikan nomor VA, pergantian metode pembayaran, penyamaran pasca-lunas, idempotensi webhook, deteksi duplikasi kode, hak akses anti-IDOR, format minimarket/WIB, dan dwibahasa petunjuk bayar.
+
+

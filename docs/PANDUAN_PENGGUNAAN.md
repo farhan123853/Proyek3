@@ -138,3 +138,35 @@ Administrator bertanggung jawab atas kelangsungan akun pengguna dan keamanan hak
 3. **Mengubah Peran Pengguna**:
    - Admin dapat menaikkan atau menurunkan peran pengguna (Pelanggan, Pengelola, Pemilik, Admin) sesuai wewenang penugasan.
 
+---
+
+## 6. Fitur Pembayaran: Virtual Account & Kode Pembayaran Unik (Midtrans)
+
+Sistem telah dilengkapi modul penangkapan, penyimpanan, dan pemantauan nomor Virtual Account (VA) resmi yang diterbitkan oleh Midtrans untuk memenuhi transparansi transaksi:
+
+### 1. Sisi Pelanggan (`reservasi-saya.php`):
+- **Pemilihan Metode**: Pelanggan memilih metode transfer bank (BCA, BNI, BRI, Mandiri, Permata, dll.) atau gerai ritel pada popup Midtrans Snap.
+- **Kartu Kode Pembayaran Unik**:
+  - Setelah memilih metode, kartu khusus muncul pada kartu reservasi dengan latar belakang biru lembut dan batas aksen.
+  - Menampilkan badge nama bank/toko (misal: *BCA Virtual Account*, *Mandiri Bill Payment*).
+  - Menampilkan nomor Virtual Account / Kode Pembayaran dengan pemformatan spasi yang mudah dibaca.
+  - **Tombol Salin**: Memudahkan pelanggan menyalin nomor VA ke clipboard perangkat dengan konfirmasi toast interaktif.
+  - **Countdown Timer**: Menghitung mundur sisa waktu pembayaran hingga batas kedaluwarsa secara dinamis.
+  - **3 Langkah Panduan Transfer**: Instruksi terstruktur berbahasa Indonesia atau Inggris sesuai preferensi bahasa aktif pengguna.
+  - **Ganti Bank / Metode**: Memungkinkan pelanggan membatalkan instruksi bayar saat ini untuk memilih bank atau saluran pembayaran lain tanpa membuat reservasi baru.
+  - **Bantuan WhatsApp**: Tautan langsung konfirmasi ke nomor pengelola dengan format pesan otomatis memuat kode reservasi dan nomor VA.
+- **Privasi Pasca-Lunas**: Setelah transaksi dinyatakan lunas oleh Midtrans webhook, nomor VA disamarkan secara otomatis (contoh: `••••4567`) pada tampilan publik untuk menjaga privasi perbankan.
+
+### 2. Sisi Staf Pengelola (`dashboard/pengelola.php` & `struk-pembayaran.php`):
+- **Pencarian Cepat**: Kolom pencarian tabel reservasi dapat mengenali pencarian berdasarkan nomor Virtual Account, Order ID, maupun nama tamu.
+- **Tampilan Tabel**: Kolom pembayaran menampilkan nomor VA (tersamar untuk privasi umum) beserta bank penyedia.
+- **Drawer Rincian Pembayaran**: Staf dapat membuka panel geser untuk melihat nomor VA lengkap tak tersamar, waktu kedaluwarsa, serta riwayat percobaan transaksi pelanggan sebelumnya.
+- **Struk Resmi**: Halaman cetak struk (`struk-pembayaran.php`) menyertakan rincian nomor VA dan riwayat transaksi untuk arsip operasional.
+
+### 3. Sisi Administrator (`dashboard/admin.php`):
+- **Tab Transaksi**: Memuat seluruh mutasi pembayaran baik tunai maupun Midtrans.
+- **Kolom Bank & Kode VA**: Menampilkan nomor VA lengkap secara transparan untuk keperluan audit rekonsiliasi keuangan.
+- **Filter Pencarian**: Mendukung filter pencarian instan berdasarkan kode VA, Order ID, atau nama pengguna.
+- **Audit Duplikasi**: Indikator penanda khusus akan muncul jika sistem mendeteksi ketidakwajaran nomor VA yang terdaftar pada transaksi lain.
+
+
