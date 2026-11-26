@@ -28,11 +28,12 @@ $isStaff = in_array($userRole, ['admin', 'pengelola', 'pemilik'], true);
 // 3. Ambil data reservasi
 $stmt = $db->prepare("
     SELECT r.*,
-           tk.nama_tipe AS nama_villa, tk.harga_per_malam,
+           tk.nama AS nama_villa,
+           tk.harga_weekday, tk.harga_weekend,
            p.nama AS nama_pelanggan, p.email AS email_pelanggan, p.kontak AS kontak_pelanggan,
            staf.nama AS nama_staf_proses
     FROM reservasi r
-    LEFT JOIN tipe_kamar tk ON r.id_tipe = tk.id_tipe
+    LEFT JOIN tipe_villa tk ON r.id_tipe = tk.id_tipe
     LEFT JOIN pengguna p ON r.id_pelanggan = p.id_pengguna
     LEFT JOIN pengguna staf ON r.diproses_oleh = staf.id_pengguna
     WHERE r.id_reservasi = ?
@@ -277,7 +278,7 @@ require_once __DIR__ . '/includes/layout/head.php';
               <div class="text-[11px] text-stone-500">Check-in: <?= date('d/m/Y', $checkinTs) ?> | Check-out: <?= date('d/m/Y', $checkoutTs) ?></div>
             </td>
             <td class="py-2.5 text-center"><?= $malam ?> Malam</td>
-            <td class="py-2.5 text-right"><?= format_rupiah($resv['harga_per_malam']) ?></td>
+            <td class="py-2.5 text-right"><?= format_rupiah($resv['harga_weekday_saat_pesan'] ?? $resv['harga_weekday'] ?? 0) ?></td>
             <td class="py-2.5 text-right font-medium"><?= format_rupiah($resv['estimasi_total']) ?></td>
           </tr>
         </tbody>

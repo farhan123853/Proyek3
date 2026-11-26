@@ -95,6 +95,12 @@ Pengelola bertanggung jawab menangani operasional penerimaan dan validasi keters
 9. **Menangani Permohonan Menunggu yang Bentrok**:
    - Jika suatu tanggal telah habis terisi oleh reservasi lain, permohonan *menunggu* yang tersisa akan ditandai dengan lencana merah **⚠ Bentrok Jadwal**.
    - Sistem menolak tombol persetujuan pada reservasi bentrok. Pengelola dapat menolaknya dan mengabari tamu melalui tombol template WhatsApp.
+10. **Melihat Struk Pembayaran & Rincian Tagihan (Slide-Over Drawer)**:
+   - Pengelola dapat mengklik tautan **"Lihat struk"** (pada reservasi lunas) atau **"Rincian tagihan"** (pada reservasi belum lunas/menunggu) pada kolom *Pembayaran*.
+   - Panel geser (*slide-over drawer*) akan terbuka dari kanan tanpa memuat ulang halaman:
+     - **Tampilan Lunas**: Memuat nomor resi / Order ID, tanggal & jam pembayaran (WIB), metode pembayaran (kelompok & rincian), nama petugas kasir (jika tunai), catatan pembayaran, dan riwayat transaksi.
+     - **Tampilan Tagihan**: Memuat rincian tarif sewa per malam $\times$ jumlah malam menginap, sisa tagihan, serta tombol aksi cepat **"Catat Pembayaran Tunai"** untuk membuka modal kasir.
+     - **Aksi Drawer**: Tombol *Salin No. Resi* (dengan konfirmasi toast), *Cetak / Simpan PDF* (membuka tampilan ramah cetak), *Kirim via WhatsApp* (pesan konfirmasi otomatis ke tamu), dan tombol *Tutup* (didukung tombol keyboard `Esc`).
 
 ---
 

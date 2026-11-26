@@ -30,11 +30,12 @@ $isStaff = in_array($userRole, ['admin', 'pengelola', 'pemilik'], true);
 // 4. Ambil data reservasi
 $stmtResv = $db->prepare("
     SELECT r.*,
-           tk.nama_tipe AS nama_villa, tk.harga_per_malam,
+           tk.nama AS nama_villa,
+           tk.harga_weekday, tk.harga_weekend,
            p.nama AS nama_pelanggan, p.email AS email_pelanggan, p.kontak AS kontak_pelanggan,
            staf.nama AS nama_staf_proses
     FROM reservasi r
-    LEFT JOIN tipe_kamar tk ON r.id_tipe = tk.id_tipe
+    LEFT JOIN tipe_villa tk ON r.id_tipe = tk.id_tipe
     LEFT JOIN pengguna p ON r.id_pelanggan = p.id_pengguna
     LEFT JOIN pengguna staf ON r.diproses_oleh = staf.id_pengguna
     WHERE r.id_reservasi = ?
@@ -154,7 +155,8 @@ if ($isLunas) {
 }
 $waLink = "https://wa.me/{$cleanWa}?text=" . rawurlencode($waText);
 
-$payload = [
+    $hargaPerMalam = (int)($resv['harga_weekday_saat_pesan'] ?? $resv['harga_weekday'] ?? 0);
+    $payload = [
     'id_reservasi' => $id,
     'kode_reservasi' => 'RSV-' . str_pad((string)$id, 4, '0', STR_PAD_LEFT),
     'status_reservasi' => $resv['status'],
@@ -168,8 +170,8 @@ $payload = [
     ],
     'villa' => [
         'nama' => $resv['nama_villa'] ?? 'Villa Joglo Masayu',
-        'harga_per_malam' => (int)($resv['harga_per_malam'] ?? 0),
-        'harga_per_malam_fmt' => format_rupiah($resv['harga_per_malam'] ?? 0),
+        'harga_per_malam' => $hargaPerMalam,
+        'harga_per_malam_fmt' => format_rupiah($hargaPerMalam),
     ],
     'jadwal' => [
         'checkin' => $resv['tanggal_checkin'],
