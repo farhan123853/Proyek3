@@ -54,6 +54,17 @@ $stmtEst = $pdo->query("
 ");
 $estimasi = $stmtEst->fetch();
 
+// 6. Data Kedaluwarsa Tahun Terpilih (Hanya-baca, tidak masuk pemasukan)
+$stmtKedaluwarsa = $pdo->prepare("
+    SELECT 
+        COUNT(*) AS total_kedaluwarsa,
+        COALESCE(SUM(estimasi_total), 0) AS total_nominal
+    FROM reservasi 
+    WHERE status = 'kedaluwarsa' AND YEAR(tanggal_checkin) = ?
+");
+$stmtKedaluwarsa->execute([$tahun]);
+$statKedaluwarsa = $stmtKedaluwarsa->fetch() ?: ['total_kedaluwarsa' => 0, 'total_nominal' => 0];
+
 // Format label nama bulan untuk mempermudah render klien
 $namaBulan = [
     1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
@@ -84,5 +95,9 @@ json_response([
     'estimasi_terkonfirmasi' => [
         'total_terkonfirmasi' => (int)($estimasi['total_terkonfirmasi'] ?? 0),
         'total_estimasi'      => (int)($estimasi['total_estimasi'] ?? 0),
+    ],
+    'kedaluwarsa' => [
+        'total_kedaluwarsa' => (int)($statKedaluwarsa['total_kedaluwarsa'] ?? 0),
+        'total_nominal'      => (int)($statKedaluwarsa['total_nominal'] ?? 0),
     ]
 ]);

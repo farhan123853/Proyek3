@@ -394,26 +394,148 @@ require_once __DIR__ . '/includes/layout/head.php';
 
               <?php else: ?>
                 <!-- Sub-Kondisi 2D: Belum Dibayar -->
-                <div class="text-xs text-stone-600 max-w-sm">
-                  <div class="text-stone-800 font-semibold mb-0.5">
-                    <?= t('payment.expiry_notice', ['waktu' => $batasWaktuStr]) ?>
-                    <?php if ($isLewatBatas): ?>
-                      <span class="inline-block ml-1 text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded text-[10px] font-bold"><?= t('payment.overdue_badge') ?></span>
-                    <?php endif; ?>
+                <?php
+                  $startTs = !empty($r['dibuat_pada']) ? strtotime($r['dibuat_pada']) : ($batasWaktuTs - (PEMBAYARAN_BATAS_JAM * 3600));
+                  $totalWindow = max(1, $batasWaktuTs - $startTs);
+                  $elapsedWindow = max(0, time() - $startTs);
+                  $progressPct = (int)min(100, max(0, round(($elapsedWindow / $totalWindow) * 100)));
+                  $isUrgent = ($sisaDetikBayar <= 10800);
+                  $barColorClass = ($isLewatBatas || $isUrgent) ? 'bg-rose-600' : 'bg-amber-600';
+                  $initHours = floor($sisaDetikBayar / 3600);
+                  $initMins = floor(($sisaDetikBayar % 3600) / 60);
+                  $initSecs = $sisaDetikBayar % 60;
+                  $initCountdownStr = $sisaDetikBayar > 0
+                    ? sprintf('%02dj %02dm %02dd', $initHours, $initMins, $initSecs)
+                    : t('payment.countdown_expired');
+                ?>
+                <div class="w-full space-y-3">
+                  <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    <div class="text-xs text-stone-600 flex-1 space-y-2">
+                      <div class="flex items-center justify-between flex-wrap gap-2">
+                        <div class="text-stone-800 font-semibold flex items-center gap-1.5 flex-wrap">
+                          <svg class="w-4 h-4 <?= $isUrgent ? 'text-rose-600' : 'text-amber-600' ?> shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                          <span><?= e(t('payment.time_remaining')) ?>:</span>
+                          <span class="deadline-countdown font-mono font-bold <?= $isUrgent ? 'text-rose-700' : 'text-amber-900' ?>"
+                                data-deadline-ts="<?= (int)$batasWaktuTs ?>"
+                                data-server-now="<?= time() ?>"
+                                data-expired-text="<?= e(t('payment.countdown_expired')) ?>"><?= e($initCountdownStr) ?></span>
+                          <?php if ($isLewatBatas): ?>
+                            <span class="inline-block text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded text-[10px] font-bold"><?= e(t('payment.overdue_badge')) ?></span>
+                          <?php endif; ?>
+                        </div>
+                        <span class="text-[11px] text-stone-500"><?= e(t('payment.expiry_notice', ['waktu' => $batasWaktuStr])) ?></span>
+                      </div>
+
+                      <!-- Progress Bar Waktu Berjalan -->
+                      <div class="w-full bg-stone-200 rounded-full h-2 overflow-hidden" role="progressbar" aria-valuenow="<?= $progressPct ?>" aria-valuemin="0" aria-valuemax="100">
+                        <div class="h-full <?= $barColorClass ?> rounded-full transition-all duration-500" style="width: <?= $progressPct ?>%"></div>
+                      </div>
+
+                      <?php if ($isUrgent): ?>
+                        <div class="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
+                          <svg class="w-4 h-4 text-rose-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                          <span><?= e(t('payment.urgent_expiry_warning', ['sisa' => t('payment.three_hours')])) ?></span>
+                        </div>
+                      <?php endif; ?>
+
+                      <p class="text-[11px] text-stone-500 mb-0">
+                        <?= e(t('payment.cash_plan_desc')) ?>
+                      </p>
+                    </div>
+
+                    <div class="flex items-center gap-2 flex-wrap shrink-0">
+                      <button type="button" class="btn btn-sm btn-gold btn-pay-snap text-xs py-2 px-4 shadow font-bold" data-id="<?= $idRes ?>">
+                        <?= e(t('payment.btn_pay_now')) ?>
+                      </button>
+
+                      <?php if ($rencanaBayar === 'tunai'): ?>
+                        <form method="POST" action="reservasi-saya.php" class="inline-block">
+                          <?= csrf_field() ?>
+                          <input type="hidden" name="aksi" value="kembali_bayar_online">
+                          <input type="hidden" name="id_reservasi" value="<?= $idRes ?>">
+                          <button type="submit" class="btn btn-sm btn-ghost bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 text-xs py-2 px-3">
+                            <?= e(t('payment.btn_switch_online')) ?>
+                          </button>
+                        </form>
+                      <?php else: ?>
+                        <form method="POST" action="reservasi-saya.php" class="inline-block">
+                          <?= csrf_field() ?>
+                          <input type="hidden" name="aksi" value="pilih_bayar_tunai">
+                          <input type="hidden" name="id_reservasi" value="<?= $idRes ?>">
+                          <button type="submit" class="btn btn-sm btn-ghost bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 text-xs py-2 px-3">
+                            <?= e(t('payment.btn_pay_cash')) ?>
+                          </button>
+                        </form>
+                      <?php endif; ?>
+                    </div>
                   </div>
-                  <span class="text-stone-500"><?= t('payment.pay_cash_note') ?></span>
-                </div>
-                <div>
-                  <button type="button" class="btn btn-sm btn-gold btn-pay-snap text-xs py-2 px-4 shadow font-bold" data-id="<?= $idRes ?>">
-                    <?= t('payment.btn_pay_now') ?>
-                  </button>
                 </div>
               <?php endif; ?>
 
+            <?php elseif ($r['status'] === 'kedaluwarsa'): ?>
+              <!-- KONDISI 3: Kedaluwarsa -->
+              <?php
+                $waktuKedaluwarsaStr = !empty($r['kedaluwarsa_pada'])
+                    ? date('d M Y, H:i', strtotime($r['kedaluwarsa_pada'])) . ' WIB'
+                    : $batasWaktuStr;
+
+                $slotMasihTersedia = false;
+                if ($r['tanggal_checkin'] >= date('Y-m-d')) {
+                    $ketersediaan = hitung_ketersediaan((int)$r['id_tipe'], $r['tanggal_checkin'], $r['tanggal_checkout'], $pdo);
+                    if (!empty($ketersediaan['malam'])) {
+                        $adaPenuh = false;
+                        foreach ($ketersediaan['malam'] as $malam) {
+                            if ($malam['status'] === 'penuh') {
+                                $adaPenuh = true;
+                                break;
+                            }
+                        }
+                        $slotMasihTersedia = !$adaPenuh;
+                    }
+                }
+
+                $pesanWaExpired = urlencode(get_active_lang() === 'en'
+                    ? "Hello Joglo Masayu, my reservation #RSV-{$idRes} ({$r['nama_villa']}) has expired. I would like to inquire about rebooking."
+                    : "Halo Pengelola Joglo Masayu, reservasi saya #RSV-{$idRes} ({$r['nama_villa']}) telah kedaluwarsa. Saya ingin menanyakan pemesanan ulang. Terima kasih."
+                );
+              ?>
+              <div class="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="text-xs text-stone-600 space-y-1.5 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="badge-status status-kedaluwarsa text-xs px-2.5 py-0.5 rounded-full font-semibold">
+                      <?= e(t('my_bookings.status_kedaluwarsa')) ?>
+                    </span>
+                    <?php if ($slotMasihTersedia): ?>
+                      <span class="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full text-[11px] font-semibold">
+                        <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <span><?= e(t('my_bookings.slot_still_available')) ?></span>
+                      </span>
+                    <?php else: ?>
+                      <span class="inline-flex items-center gap-1 text-stone-600 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded-full text-[11px] font-medium">
+                        <span><?= e(t('my_bookings.slot_not_available')) ?></span>
+                      </span>
+                    <?php endif; ?>
+                  </div>
+                  <p class="text-stone-600 mb-0">
+                    <?= e(t('my_bookings.expired_desc', ['waktu' => $waktuKedaluwarsaStr])) ?>
+                  </p>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap shrink-0">
+                  <a href="reservasi.php?id_tipe=<?= (int)$r['id_tipe'] ?>&checkin=<?= e($r['tanggal_checkin']) ?>&checkout=<?= e($r['tanggal_checkout']) ?>&tamu=<?= e($r['jumlah_tamu']) ?>" class="btn btn-sm btn-gold text-xs py-1.5 px-3 inline-flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    <span><?= e(t('my_bookings.rebook_same_date')) ?></span>
+                  </a>
+                  <a href="https://wa.me/6281234567890?text=<?= $pesanWaExpired ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost text-xs inline-flex items-center gap-1.5 text-emerald-800 border-emerald-200 hover:bg-emerald-50 py-1.5 px-3">
+                    <svg class="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.288.043.088.072.191.014.306-.058.115-.087.187-.173.289l-.26.302c-.087.087-.179.182-.077.357.101.174.451.744.969 1.205.666.594 1.229.778 1.403.865.174.087.275.072.376-.043.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.073.043.419-.101.824z"/></svg>
+                    <span><?= e(t('my_bookings.btn_whatsapp')) ?></span>
+                  </a>
+                </div>
+              </div>
+
             <?php else: ?>
-              <!-- KONDISI 3: Ditolak atau Dibatalkan -->
+              <!-- KONDISI 4: Ditolak, Dibatalkan, atau Kedaluwarsa (fallback) -->
               <div class="text-xs text-stone-500">
-                <span>Reservasi ini berstatus <?= e($r['status']) ?>. Tidak ada tindakan pembayaran yang diperlukan.</span>
+                <span><?= e(t('my_bookings.status_no_action', ['status' => $resStatusLabel])) ?></span>
               </div>
             <?php endif; ?>
           </div>
@@ -718,31 +840,75 @@ require_once __DIR__ . '/includes/layout/head.php';
       });
     });
 
-    // 5. Timer Hitung Mundur Sisa Waktu Pembayaran (Countdown)
-    function updateCountdowns() {
-      const elements = document.querySelectorAll('.va-countdown[data-expiry]');
-      const now = new Date().getTime();
-      elements.forEach(function(el) {
-        const expiryStr = el.getAttribute('data-expiry');
-        if (!expiryStr) return;
-        const expiryTime = new Date(expiryStr.replace(/-/g, '/')).getTime();
-        const diff = expiryTime - now;
-        if (diff <= 0) {
-          el.textContent = el.getAttribute('data-expired-text') || 'Kedaluwarsa';
-          el.classList.add('text-rose-600', 'font-bold');
-        } else {
-          const hours = Math.floor(diff / (1000 * 60 * 60));
-          const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-          const secs = Math.floor((diff % (1000 * 60)) / 1000);
-          el.textContent = (hours < 10 ? '0' : '') + hours + 'j ' + (mins < 10 ? '0' : '') + mins + 'm ' + (secs < 10 ? '0' : '') + secs + 'd';
-        }
-      });
-    }
-    updateCountdowns();
-    setInterval(updateCountdowns, 1000);
   });
   </script>
   <?php endif; ?>
 <?php endif; ?>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // 5. Timer Hitung Mundur Sisa Waktu Pembayaran (Countdown)
+  var serverClockOffsetMs = 0;
+  var firstDeadlineEl = document.querySelector('.deadline-countdown[data-server-now]');
+  if (firstDeadlineEl) {
+    var serverNowSec = parseInt(firstDeadlineEl.getAttribute('data-server-now'), 10);
+    if (!isNaN(serverNowSec)) {
+      serverClockOffsetMs = (serverNowSec * 1000) - Date.now();
+    }
+  }
+
+  var deadlineReloadScheduled = false;
+
+  function formatCountdown(diffMs) {
+    var totalSecs = Math.max(0, Math.floor(diffMs / 1000));
+    var hours = Math.floor(totalSecs / 3600);
+    var mins = Math.floor((totalSecs % 3600) / 60);
+    var secs = totalSecs % 60;
+    return (hours < 10 ? '0' : '') + hours + 'j ' + (mins < 10 ? '0' : '') + mins + 'm ' + (secs < 10 ? '0' : '') + secs + 'd';
+  }
+
+  function updateCountdowns() {
+    var now = Date.now() + serverClockOffsetMs;
+
+    var vaElements = document.querySelectorAll('.va-countdown[data-expiry]');
+    vaElements.forEach(function(el) {
+      var expiryStr = el.getAttribute('data-expiry');
+      if (!expiryStr) return;
+      var expiryTime = new Date(expiryStr.replace(/-/g, '/')).getTime();
+      var diff = expiryTime - Date.now();
+      if (diff <= 0) {
+        el.textContent = el.getAttribute('data-expired-text') || 'Kedaluwarsa';
+        el.classList.add('text-rose-600', 'font-bold');
+      } else {
+        el.textContent = formatCountdown(diff);
+      }
+    });
+
+    var deadlineElements = document.querySelectorAll('.deadline-countdown[data-deadline-ts]');
+    deadlineElements.forEach(function(el) {
+      var tsSec = parseInt(el.getAttribute('data-deadline-ts'), 10);
+      if (isNaN(tsSec)) return;
+      var diff = (tsSec * 1000) - now;
+      if (diff <= 0) {
+        el.textContent = el.getAttribute('data-expired-text') || 'Kedaluwarsa';
+        el.classList.add('text-rose-600', 'font-bold');
+        if (el.getAttribute('data-was-active') === '1' && !deadlineReloadScheduled) {
+          deadlineReloadScheduled = true;
+          setTimeout(function() { window.location.reload(); }, 1500);
+        }
+      } else {
+        el.setAttribute('data-was-active', '1');
+        el.textContent = formatCountdown(diff);
+        if (diff <= 10800 * 1000) {
+          el.classList.add('text-rose-700');
+        }
+      }
+    });
+  }
+
+  updateCountdowns();
+  setInterval(updateCountdowns, 1000);
+});
+</script>
 
 <?php require_once __DIR__ . '/includes/layout/foot.php'; ?>

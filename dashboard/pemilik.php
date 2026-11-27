@@ -53,6 +53,17 @@ $stmtEst = $pdo->query("
 ");
 $estimasi = $stmtEst->fetch();
 
+// 3b. Statistik Kedaluwarsa (Hanya-baca, tidak masuk pemasukan & tidak memengaruhi estimasi terkonfirmasi)
+$stmtKedaluwarsa = $pdo->prepare("
+    SELECT 
+        COUNT(*) AS total_kedaluwarsa,
+        COALESCE(SUM(estimasi_total), 0) AS total_nominal
+    FROM reservasi 
+    WHERE status = 'kedaluwarsa' AND YEAR(tanggal_checkin) = ?
+");
+$stmtKedaluwarsa->execute([$tahun]);
+$statKedaluwarsaTahun = $stmtKedaluwarsa->fetch() ?: ['total_kedaluwarsa' => 0, 'total_nominal' => 0];
+
 // 4. Sumber Reservasi (Online vs Offline pada tahun terpilih)
 $stmtSumber = $pdo->prepare("
     SELECT 
@@ -522,6 +533,29 @@ if ($maxBulanNominal === 0) $maxBulanNominal = 1;
           <span class="text-xs text-violet-800 font-semibold block uppercase tracking-wider mb-1"><?= t('owner.source_offline') ?></span>
           <div class="text-2xl font-serif font-bold text-violet-900"><?= (int)$statSumber['total_offline'] ?></div>
           <p class="text-[11px] text-violet-700 mt-1 mb-0">Walk-in, WhatsApp, Telepon</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9. Kategori Reservasi Kedaluwarsa (Read-only Pemilik) -->
+    <div class="bg-stone-50 border border-stone-200 rounded-2xl p-5 mb-8 shadow-sm">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-stone-400"></span>
+          <h3 class="text-sm uppercase tracking-wider font-bold text-stone-700 mb-0">Reservasi Kedaluwarsa (<?= $tahun ?>)</h3>
+        </div>
+        <span class="text-xs text-stone-500 font-medium"><?= (int)$statKedaluwarsaTahun['total_kedaluwarsa'] ?> reservasi dibatalkan otomatis</span>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="bg-white border border-stone-200 rounded-xl p-4">
+          <span class="text-xs text-stone-500 font-semibold block uppercase tracking-wider mb-1">Jumlah Reservasi Kedaluwarsa</span>
+          <div class="text-2xl font-serif font-bold text-stone-700"><?= (int)$statKedaluwarsaTahun['total_kedaluwarsa'] ?></div>
+          <p class="text-[11px] text-stone-500 mt-1 mb-0">Unit kamar otomatis dilepas kembali ke kalender</p>
+        </div>
+        <div class="bg-white border border-stone-200 rounded-xl p-4">
+          <span class="text-xs text-stone-500 font-semibold block uppercase tracking-wider mb-1">Estimasi Nilai Terlepas</span>
+          <div class="text-2xl font-serif font-bold text-stone-700"><?= format_rupiah($statKedaluwarsaTahun['total_nominal']) ?></div>
+          <p class="text-[11px] text-stone-500 mt-1 mb-0">Tidak masuk dalam perhitungan pemasukan aktual</p>
         </div>
       </div>
     </div>

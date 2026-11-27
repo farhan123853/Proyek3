@@ -190,6 +190,7 @@ $whereSql = !empty($whereClauses) ? "WHERE " . implode(" AND ", $whereClauses) :
 $sql = "SELECT r.*, v.nama AS nama_villa, v.slug AS slug_villa, 
                COALESCE(p.nama, r.nama_tamu) AS nama_pelanggan,
                p.email AS email_pelanggan,
+               p.bahasa AS bahasa_pelanggan,
                COALESCE(p.kontak, r.kontak_tamu) AS kontak_pelanggan,
                staf.nama AS nama_staf,
                r.sumber AS sumber_reservasi
@@ -211,20 +212,15 @@ $rawList = $stmtList->fetchAll();
 $allIds = array_map(fn($item) => (int)$item['id_reservasi'], $rawList);
 $pembayaranBatch = ambil_pembayaran_batch($pdo, $allIds);
 
+// Siapkan statement log riwayat status reservasi (dieksekusi per baris yang lolos filter)
+$stmtLog = $pdo->prepare("SELECT rl.*, p.nama AS nama_pengguna FROM reservasi_log rl LEFT JOIN pengguna p ON rl.oleh_pengguna = p.id_pengguna WHERE rl.id_reservasi = ? ORDER BY rl.id_log DESC LIMIT 10");
+
 // Olah status bayar efektif untuk setiap reservasi
 $reservasiList = [];
 foreach ($rawList as $r) {
     $idRes = (int)$r['id_reservasi'];
     $bayarInfo = $pembayaranBatch[$idRes] ?? ['status' => 'belum_dibayar', 'pembayaran' => null, 'history' => []];
     $statusBayar = $bayarInfo['status'];
-
-    // Filter pembayaran client-side bila diisi
-    if (!empty($filterBayar)) {
-        if ($filterBayar === 'belum_dibayar' && $statusBayar !== 'belum_dibayar') continue;
-        if ($filterBayar === 'menunggu' && $statusBayar !== 'menunggu') continue;
-        if ($filterBayar === 'lunas' && $statusBayar !== 'lunas') continue;
-        if ($filterBayar === 'gagal_kedaluwarsa' && !in_array($statusBayar, ['gagal', 'kedaluwarsa'], true)) continue;
-    }
 
     $history = $bayarInfo['history'] ?? [];
 
@@ -245,6 +241,49 @@ foreach ($rawList as $r) {
     $r['sisa_detik_bayar'] = max(0, $tsBatas - time());
     $r['rencana_bayar'] = $r['rencana_bayar'] ?? 'online';
 
+    // Filter pembayaran client-side bila diisi
+    if (!empty($filterBayar)) {
+        if ($filterBayar === 'perlu_bayar' && ($r['status'] !== 'dikonfirmasi' || $statusBayar === 'lunas')) continue;
+        if ($filterBayar === 'akan_kedaluwarsa' && ($r['status'] !== 'dikonfirmasi' || $statusBayar === 'lunas' || $r['sisa_detik_bayar'] <= 0 || $r['sisa_detik_bayar'] > 6 * 3600)) continue;
+        if ($filterBayar === 'kedaluwarsa' && $r['status'] !== 'kedaluwarsa' && $statusBayar !== 'kedaluwarsa') continue;
+        if ($filterBayar === 'belum_dibayar' && $statusBayar !== 'belum_dibayar') continue;
+        if ($filterBayar === 'menunggu' && $statusBayar !== 'menunggu') continue;
+        if ($filterBayar === 'lunas' && $statusBayar !== 'lunas') continue;
+        if ($filterBayar === 'gagal_kedaluwarsa' && !in_array($statusBayar, ['gagal', 'kedaluwarsa'], true)) continue;
+    }
+
+    // Format sisa waktu untuk template pengingat WA
+    $sisaWaktuFmt = '';
+    if ((int)($r['sisa_detik_bayar'] ?? 0) > 0) {
+        $sJam = intdiv((int)$r['sisa_detik_bayar'], 3600);
+        $sMnt = intdiv((int)$r['sisa_detik_bayar'] % 3600, 60);
+        $sisaWaktuFmt = "{$sJam}j {$sMnt}m";
+    }
+
+    // Siapkan tautan WhatsApp dwibahasa sesuai bahasa pengguna
+    $nomorHpWa = preg_replace('/^0/', '62', preg_replace('/[^\d]/', '', (string)($r['kontak_pelanggan'] ?? '')));
+    $waktuKedaluwarsaStr = !empty($r['kedaluwarsa_pada'])
+        ? date('d/m/Y H:i', strtotime($r['kedaluwarsa_pada'])) . ' WIB'
+        : $r['batas_waktu_str'];
+    $langCust = $r['bahasa_pelanggan'] ?? 'id';
+
+    if ($langCust === 'en') {
+        $waReminderText = urlencode("Hello {$r['nama_pelanggan']}, your reservation #RSV-{$idRes} ({$r['nama_villa']}) has been CONFIRMED. Please complete the payment of " . format_rupiah($r['estimasi_total']) . " before {$r['batas_waktu_str']}" . ($sisaWaktuFmt ? " (remaining time: {$sisaWaktuFmt})" : "") . " via online payment (VA/E-wallet) or cash upon arrival at the villa. Thank you. - Villa Joglo Masayu");
+        $waPaidText = urlencode("Hello {$r['nama_pelanggan']}, we confirm that payment for reservation #RSV-{$idRes} ({$r['nama_villa']}) amounting to " . format_rupiah($r['estimasi_total']) . " is PAID IN FULL. We look forward to welcoming you on " . date('d/m/Y', strtotime($r['tanggal_checkin'])) . ". Thank you. - Villa Joglo Masayu");
+        $waExpiredText = urlencode("Hello {$r['nama_pelanggan']}, we inform you that reservation #RSV-{$idRes} ({$r['nama_villa']}) for check-in " . date('d/m/Y', strtotime($r['tanggal_checkin'])) . " has EXPIRED at {$waktuKedaluwarsaStr} due to passing the payment deadline. Please make a new reservation if you still wish to stay. Thank you. - Villa Joglo Masayu");
+    } else {
+        $waReminderText = urlencode("Halo Bapak/Ibu {$r['nama_pelanggan']}, reservasi Anda #RSV-{$idRes} ({$r['nama_villa']}) telah DIKONFIRMASI. Silakan selesaikan pembayaran sebesar " . format_rupiah($r['estimasi_total']) . " sebelum {$r['batas_waktu_str']}" . ($sisaWaktuFmt ? " (sisa waktu: {$sisaWaktuFmt})" : "") . " via online (VA/E-wallet) di halaman Reservasi Saya atau tunai saat tiba di villa. Terima kasih. - Villa Joglo Masayu");
+        $waPaidText = urlencode("Halo Bapak/Ibu {$r['nama_pelanggan']}, kami konfirmasi bahwa pembayaran untuk reservasi #RSV-{$idRes} ({$r['nama_villa']}) sebesar " . format_rupiah($r['estimasi_total']) . " telah LUNAS. Kami menantikan kedatangan Anda pada " . date('d/m/Y', strtotime($r['tanggal_checkin'])) . ". Terima kasih. - Villa Joglo Masayu");
+        $waExpiredText = urlencode("Halo Bapak/Ibu {$r['nama_pelanggan']}, kami informasikan bahwa reservasi #RSV-{$idRes} ({$r['nama_villa']}) untuk check-in " . date('d/m/Y', strtotime($r['tanggal_checkin'])) . " telah kedaluwarsa pada {$waktuKedaluwarsaStr} karena melewati batas waktu pembayaran. Silakan lakukan pemesanan ulang jika masih ingin menginap. Terima kasih. - Villa Joglo Masayu");
+    }
+
+    $r['wa_reminder_url'] = "https://wa.me/{$nomorHpWa}?text=" . ($statusBayar === 'lunas' ? $waPaidText : $waReminderText);
+    $r['wa_expired_url'] = "https://wa.me/{$nomorHpWa}?text={$waExpiredText}";
+
+    // Ambil riwayat mutasi status reservasi
+    $stmtLog->execute([$idRes]);
+    $r['riwayat_log'] = $stmtLog->fetchAll(PDO::FETCH_ASSOC);
+
     // Deteksi "bentrok": reservasi menunggu yang bertabrakan dengan yang sudah dikonfirmasi
     $r['is_bentrok'] = false;
     if ($r['status'] === 'menunggu') {
@@ -264,10 +303,91 @@ foreach ($rawList as $r) {
     $reservasiList[] = $r;
 }
 
+if (!function_exists('render_pengelola_tagihan_badge')) {
+    /**
+     * Render badge sisa waktu bayar, lewat batas, atau kedaluwarsa pada kolom Estimasi Tagihan.
+     */
+    function render_pengelola_tagihan_badge(array $r, bool $isLunas): string
+    {
+        if ($r['status'] === 'kedaluwarsa') {
+            $waktu = !empty($r['kedaluwarsa_pada'])
+                ? ' · ' . e(date('d/m/Y H:i', strtotime($r['kedaluwarsa_pada']))) . ' WIB'
+                : '';
+            return '<span class="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold text-stone-700 bg-stone-100 border border-stone-300 px-1.5 py-0.5 rounded">'
+                . e(t('payment.badge_kedaluwarsa')) . $waktu . '</span>';
+        }
+
+        if ($r['status'] === 'dikonfirmasi' && !$isLunas && (int)($r['sisa_detik_bayar'] ?? 0) > 0) {
+            $sisaDetik = (int)$r['sisa_detik_bayar'];
+            $sisaJam = intdiv($sisaDetik, 3600);
+            $sisaMenit = intdiv($sisaDetik % 3600, 60);
+            if ($sisaJam === 0 && $sisaMenit === 0) {
+                $sisaMenit = 1;
+            }
+            return '<span class="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded" title="' . e(t('payment.time_remaining')) . ': ' . e($r['batas_waktu_str']) . '">'
+                . 'Sisa ' . $sisaJam . 'j ' . $sisaMenit . 'm</span>';
+        }
+
+        if ($r['status'] === 'dikonfirmasi' && !empty($r['is_lewat_batas'])) {
+            return '<span class="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-rose-800 bg-rose-50 border border-rose-300 px-1.5 py-0.5 rounded" title="' . e($r['batas_waktu_str']) . '">'
+                . '⚠ ' . e(t('payment.overdue_badge')) . ' (' . e($r['batas_waktu_str']) . ')</span>';
+        }
+
+        return '';
+    }
+}
+
+if (!function_exists('render_pengelola_reservasi_log')) {
+    /**
+     * Render panel collapsible riwayat mutasi status (reservasi_log) untuk desktop & mobile.
+     */
+    function render_pengelola_reservasi_log(array $logs): string
+    {
+        $count = count($logs);
+        $html = '<details class="group text-xs">';
+        $html .= '<summary class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-stone-500 hover:text-stone-800 cursor-pointer select-none">';
+        $html .= '<span>' . e(t('payment.history_title')) . ' (' . $count . ')</span>';
+        $html .= '<span class="text-stone-400 group-open:rotate-180 transition-transform duration-150">▾</span>';
+        $html .= '</summary>';
+        $html .= '<div class="mt-2 space-y-1.5">';
+
+        if ($count === 0) {
+            $html .= '<div class="text-[11px] text-stone-400 italic">' . e(t('payment.history_empty')) . '</div>';
+        } else {
+            foreach ($logs as $log) {
+                $waktu = !empty($log['dibuat_pada']) ? date('d/m/Y H:i', strtotime($log['dibuat_pada'])) . ' WIB' : '-';
+                $aktor = !empty($log['nama_pengguna']) ? $log['nama_pengguna'] : t('payment.system_user');
+                $keStatus = format_status_reservasi((string)($log['ke_status'] ?? ''));
+                $transisi = !empty($log['dari_status'])
+                    ? format_status_reservasi((string)$log['dari_status']) . ' → ' . $keStatus
+                    : $keStatus;
+                $alasan = !empty($log['alasan']) ? trim((string)$log['alasan']) : '';
+
+                $html .= '<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 bg-white border border-stone-200/80 rounded-lg px-2.5 py-1.5 text-[11px]">';
+                $html .= '<div class="flex flex-wrap items-center gap-1.5">';
+                $html .= '<span class="font-semibold text-stone-800">' . e($transisi) . '</span>';
+                $html .= '<span class="text-stone-400">&bull;</span>';
+                $html .= '<span class="text-stone-600">' . e($aktor) . '</span>';
+                if ($alasan !== '') {
+                    $html .= '<span class="text-stone-400">&bull;</span>';
+                    $html .= '<span class="text-stone-500 italic">' . e($alasan) . '</span>';
+                }
+                $html .= '</div>';
+                $html .= '<span class="text-[10px] text-stone-400 font-mono whitespace-nowrap">' . e($waktu) . '</span>';
+                $html .= '</div>';
+            }
+        }
+
+        $html .= '</div></details>';
+        return $html;
+    }
+}
+
 // Statistik ringkas status
 $statMenunggu = (int)$pdo->query("SELECT COUNT(*) FROM `reservasi` WHERE `status` = 'menunggu'")->fetchColumn();
 $statKonfirmasi = (int)$pdo->query("SELECT COUNT(*) FROM `reservasi` WHERE `status` = 'dikonfirmasi'")->fetchColumn();
 $statDitolak = (int)$pdo->query("SELECT COUNT(*) FROM `reservasi` WHERE `status` = 'ditolak'")->fetchColumn();
+$statDibatalkan = (int)$pdo->query("SELECT COUNT(*) FROM `reservasi` WHERE `status` = 'dibatalkan'")->fetchColumn();
 $statKedaluwarsa = (int)$pdo->query("SELECT COUNT(*) FROM `reservasi` WHERE `status` = 'kedaluwarsa'")->fetchColumn();
 
 // Statistik pembayaran (pada reservasi dikonfirmasi)
@@ -301,7 +421,7 @@ require_once __DIR__ . '/../includes/layout/head.php';
   </div>
 
   <!-- Kartu Statistik Cepat -->
-  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
     <div class="bg-white border <?= $statMenunggu > 0 ? 'border-amber-300 ring-2 ring-amber-100' : 'border-stone-200' ?> rounded-xl p-4 shadow-sm">
       <span class="text-xs text-stone-500 font-semibold block uppercase tracking-wider mb-1"><?= t('dashboard.menunggu_konfirmasi') ?></span>
       <div class="text-2xl font-bold text-amber-800"><?= $statMenunggu ?></div>
@@ -322,6 +442,11 @@ require_once __DIR__ . '/../includes/layout/head.php';
       <div class="text-2xl font-bold text-rose-700"><?= $statDitolak ?></div>
       <div class="text-[11px] text-rose-500 mt-1">Kapasitas/jadwal bentrok</div>
     </div>
+    <div class="bg-stone-50 border border-stone-200 rounded-xl p-4 shadow-sm">
+      <span class="text-xs text-stone-600 font-semibold block uppercase tracking-wider mb-1"><?= e(t('my_bookings.status_kedaluwarsa')) ?></span>
+      <div class="text-2xl font-bold text-stone-600"><?= $statKedaluwarsa ?></div>
+      <div class="text-[11px] text-stone-500 mt-1">Lewat batas pembayaran</div>
+    </div>
   </div>
 
   <!-- Bar Penyaring Ganda: Status Reservasi & Status Pembayaran -->
@@ -335,11 +460,16 @@ require_once __DIR__ . '/../includes/layout/head.php';
         <option value="menunggu" <?= $filterStatus === 'menunggu' ? 'selected' : '' ?>><?= t('my_bookings.status_menunggu') ?> (<?= $statMenunggu ?>)</option>
         <option value="dikonfirmasi" <?= $filterStatus === 'dikonfirmasi' ? 'selected' : '' ?>><?= t('my_bookings.status_dikonfirmasi') ?> (<?= $statKonfirmasi ?>)</option>
         <option value="ditolak" <?= $filterStatus === 'ditolak' ? 'selected' : '' ?>><?= t('common.cancel') ?> (<?= $statDitolak ?>)</option>
+        <option value="dibatalkan" <?= $filterStatus === 'dibatalkan' ? 'selected' : '' ?>><?= e(t('my_bookings.status_dibatalkan')) ?> (<?= $statDibatalkan ?>)</option>
+        <option value="kedaluwarsa" <?= $filterStatus === 'kedaluwarsa' ? 'selected' : '' ?>><?= e(t('my_bookings.status_kedaluwarsa')) ?> (<?= $statKedaluwarsa ?>)</option>
       </select>
 
       <!-- Filter Pembayaran -->
       <select name="bayar" class="form-control text-xs py-1.5 px-3 rounded-lg border-stone-300 w-auto" onchange="this.form.submit()">
         <option value="">Semua Pembayaran</option>
+        <option value="perlu_bayar" <?= $filterBayar === 'perlu_bayar' ? 'selected' : '' ?>><?= t('payment.filter_perlu_bayar') ?></option>
+        <option value="akan_kedaluwarsa" <?= $filterBayar === 'akan_kedaluwarsa' ? 'selected' : '' ?>><?= t('payment.filter_akan_kedaluwarsa') ?></option>
+        <option value="kedaluwarsa" <?= $filterBayar === 'kedaluwarsa' ? 'selected' : '' ?>><?= t('payment.filter_kedaluwarsa') ?></option>
         <option value="belum_dibayar" <?= $filterBayar === 'belum_dibayar' ? 'selected' : '' ?>><?= t('payment.badge_belum_dibayar') ?></option>
         <option value="menunggu" <?= $filterBayar === 'menunggu' ? 'selected' : '' ?>><?= t('payment.badge_menunggu') ?></option>
         <option value="lunas" <?= $filterBayar === 'lunas' ? 'selected' : '' ?>><?= t('payment.badge_lunas') ?></option>
@@ -429,17 +559,18 @@ require_once __DIR__ . '/../includes/layout/head.php';
                 </td>
                 <td class="p-3.5 text-xs">
                   <div class="font-bold text-stone-900"><?= format_rupiah($r['estimasi_total']) ?></div>
-                  <?php if ($r['is_lewat_batas']): ?>
-                    <span class="inline-block mt-1 text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
-                      <?= t('payment.overdue_badge') ?>
-                    </span>
-                  <?php endif; ?>
+                  <?= render_pengelola_tagihan_badge($r, $isLunas) ?>
                 </td>
                 <td class="p-3.5 text-xs">
                   <span class="badge-status status-<?= e($r['status']) ?> text-xs px-2.5 py-0.5 rounded-full font-semibold">
                     <?= e(format_status_reservasi($r['status'])) ?>
                   </span>
-                  <?php if (!empty($r['nama_staf'])): ?>
+                  <?php if ($r['status'] === 'kedaluwarsa'): ?>
+                    <div class="text-[10px] text-stone-500 mt-1">Oleh: <?= e(t('payment.system_user')) ?></div>
+                    <?php if (!empty($r['kedaluwarsa_pada'])): ?>
+                      <div class="text-[10px] text-stone-400 mt-0.5"><?= e(date('d/m/Y H:i', strtotime($r['kedaluwarsa_pada']))) ?> WIB</div>
+                    <?php endif; ?>
+                  <?php elseif (!empty($r['nama_staf'])): ?>
                     <div class="text-[10px] text-stone-400 mt-1">Oleh: <?= e($r['nama_staf']) ?></div>
                   <?php endif; ?>
                 </td>
@@ -514,17 +645,10 @@ require_once __DIR__ . '/../includes/layout/head.php';
                         </button>
                       <?php endif; ?>
 
-                      <!-- Tombol Kabari via WhatsApp -->
-                      <?php
-                        $nomorHp = preg_replace('/^0/', '62', preg_replace('/[^\d]/', '', $r['kontak_pelanggan']));
-                        if ($isLunas) {
-                            $waText = urlencode("Halo Bapak/Ibu {$r['nama_pelanggan']}, kami konfirmasi bahwa pembayaran untuk reservasi #RSV-{$idRes} ({$r['nama_villa']}) sebesar " . format_rupiah($r['estimasi_total']) . " telah LUNAS. Kami menantikan kedatangan Anda pada " . date('d/m/Y', strtotime($r['tanggal_checkin'])) . ". Terima kasih. - Villa Joglo Masayu");
-                        } else {
-                            $waText = urlencode("Halo Bapak/Ibu {$r['nama_pelanggan']}, reservasi Anda #RSV-{$idRes} ({$r['nama_villa']}) telah DIKONFIRMASI. Silakan selesaikan pembayaran sebesar " . format_rupiah($r['estimasi_total']) . " sebelum {$r['batas_waktu_str']} via online (VA/E-wallet) di halaman Reservasi Saya atau tunai saat tiba di villa. Terima kasih. - Villa Joglo Masayu");
-                        }
-                      ?>
-                      <a href="https://wa.me/<?= $nomorHp ?>?text=<?= $waText ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost text-xs py-1 px-2 border border-stone-300" title="Hubungi via WhatsApp">
+                      <!-- Tombol Kabari / Pengingat via WhatsApp -->
+                      <a href="<?= e($r['wa_reminder_url']) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost text-xs py-1 px-2 border border-stone-300 inline-flex items-center gap-1" title="<?= !$isLunas ? e(t('payment.wa_reminder')) : 'WhatsApp' ?>">
                         <svg class="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.288.043.088.072.191.014.306-.058.115-.087.187-.173.289l-.26.302c-.087.087-.179.182-.077.357.101.174.451.744.969 1.205.666.594 1.229.778 1.403.865.174.087.275.072.376-.043.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.073.043.419-.101.824z"/></svg>
+                        <span><?= !$isLunas ? e(t('payment.wa_reminder')) : 'WhatsApp' ?></span>
                       </a>
 
                       <!-- Tombol Tolak Disabled jika sudah Lunas -->
@@ -534,10 +658,21 @@ require_once __DIR__ . '/../includes/layout/head.php';
                         </button>
                       <?php endif; ?>
 
+                    <?php elseif ($r['status'] === 'kedaluwarsa'): ?>
+                      <a href="<?= e($r['wa_expired_url']) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost text-xs py-1 px-2 border border-stone-300 inline-flex items-center gap-1 text-stone-700 hover:bg-stone-50" title="<?= e(t('payment.wa_inform_expired')) ?>">
+                        <svg class="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.288.043.088.072.191.014.306-.058.115-.087.187-.173.289l-.26.302c-.087.087-.179.182-.077.357.101.174.451.744.969 1.205.666.594 1.229.778 1.403.865.174.087.275.072.376-.043.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.073.043.419-.101.824z"/></svg>
+                        <span><?= e(t('payment.wa_inform_expired')) ?></span>
+                      </a>
+
                     <?php else: ?>
                       <span class="text-stone-400 text-xs">Selesai</span>
                     <?php endif; ?>
                   </div>
+                </td>
+              </tr>
+              <tr class="bg-stone-50/40 !border-t-0">
+                <td colspan="7" class="px-3.5 pb-2.5 pt-1">
+                  <?= render_pengelola_reservasi_log($r['riwayat_log'] ?? []) ?>
                 </td>
               </tr>
             <?php endforeach; ?>
@@ -564,6 +699,12 @@ require_once __DIR__ . '/../includes/layout/head.php';
               <span class="badge-status status-<?= e($r['status']) ?> text-[10px] px-2 py-0.5 rounded-full font-semibold">
                 <?= e(format_status_reservasi($r['status'])) ?>
               </span>
+              <?php if ($r['status'] === 'kedaluwarsa'): ?>
+                <span class="text-[10px] text-stone-500">Oleh: <?= e(t('payment.system_user')) ?></span>
+                <?php if (!empty($r['kedaluwarsa_pada'])): ?>
+                  <span class="text-[10px] text-stone-400"><?= e(date('d/m/Y H:i', strtotime($r['kedaluwarsa_pada']))) ?> WIB</span>
+                <?php endif; ?>
+              <?php endif; ?>
               <?php if ($r['status'] === 'dikonfirmasi' || !empty($r['bayar_pembayaran'])): ?>
                 <?= render_badge_pembayaran($r['bayar_status'], true) ?>
               <?php endif; ?>
@@ -575,9 +716,7 @@ require_once __DIR__ . '/../includes/layout/head.php';
             <div><strong>Periode:</strong> <?= date('d/m/Y', strtotime($r['tanggal_checkin'])) ?> s.d. <?= date('d/m/Y', strtotime($r['tanggal_checkout'])) ?> (<?= e($r['jumlah_tamu']) ?> orang)</div>
             <div>
               <strong>Estimasi Tagihan:</strong> <span class="font-bold text-amber-900"><?= format_rupiah($r['estimasi_total']) ?></span>
-              <?php if ($r['is_lewat_batas']): ?>
-                <span class="text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.2 rounded font-bold ml-1"><?= t('payment.overdue_badge') ?></span>
-              <?php endif; ?>
+              <div class="inline-block ml-1"><?= render_pengelola_tagihan_badge($r, $isLunas) ?></div>
             </div>
             <?php if ($isLunas && !empty($r['bayar_pembayaran']['dibayar_pada'])): ?>
               <div class="text-[11px] text-stone-500">
@@ -620,10 +759,20 @@ require_once __DIR__ . '/../includes/layout/head.php';
                   <?= t('payment.btn_record_cash') ?>
                 </button>
               <?php endif; ?>
-              <a href="https://wa.me/<?= preg_replace('/^0/', '62', preg_replace('/[^\d]/', '', $r['kontak_pelanggan'])) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost text-xs py-1.5 px-2.5 border border-stone-300">
-                WhatsApp
+              <a href="<?= e($r['wa_reminder_url']) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost text-xs py-1.5 px-2.5 border border-stone-300 inline-flex items-center gap-1">
+                <svg class="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.288.043.088.072.191.014.306-.058.115-.087.187-.173.289l-.26.302c-.087.087-.179.182-.077.357.101.174.451.744.969 1.205.666.594 1.229.778 1.403.865.174.087.275.072.376-.043.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.073.043.419-.101.824z"/></svg>
+                <span><?= !$isLunas ? e(t('payment.wa_reminder')) : 'WhatsApp' ?></span>
+              </a>
+            <?php elseif ($r['status'] === 'kedaluwarsa'): ?>
+              <a href="<?= e($r['wa_expired_url']) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost text-xs py-1.5 px-2.5 border border-stone-300 inline-flex items-center gap-1 text-stone-700">
+                <svg class="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.288.043.088.072.191.014.306-.058.115-.087.187-.173.289l-.26.302c-.087.087-.179.182-.077.357.101.174.451.744.969 1.205.666.594 1.229.778 1.403.865.174.087.275.072.376-.043.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.073.043.419-.101.824z"/></svg>
+                <span><?= e(t('payment.wa_inform_expired')) ?></span>
               </a>
             <?php endif; ?>
+          </div>
+
+          <div class="mt-3 pt-2.5 border-t border-stone-100">
+            <?= render_pengelola_reservasi_log($r['riwayat_log'] ?? []) ?>
           </div>
         </div>
       <?php endforeach; ?>
