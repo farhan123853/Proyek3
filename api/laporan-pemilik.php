@@ -58,12 +58,28 @@ $estimasi = $stmtEst->fetch();
 $stmtKedaluwarsa = $pdo->prepare("
     SELECT 
         COUNT(*) AS total_kedaluwarsa,
-        COALESCE(SUM(estimasi_total), 0) AS total_nominal
+        COALESCE(SUM(estimasi_total), 0) AS total_nominal,
+        SUM(CASE WHEN batas_bayar_pada IS NOT NULL THEN 1 ELSE 0 END) AS tidak_dibayar,
+        SUM(CASE WHEN batas_bayar_pada IS NULL THEN 1 ELSE 0 END) AS tidak_diproses
     FROM reservasi 
     WHERE status = 'kedaluwarsa' AND YEAR(tanggal_checkin) = ?
 ");
 $stmtKedaluwarsa->execute([$tahun]);
-$statKedaluwarsa = $stmtKedaluwarsa->fetch() ?: ['total_kedaluwarsa' => 0, 'total_nominal' => 0];
+$statKedaluwarsa = $stmtKedaluwarsa->fetch() ?: [
+    'total_kedaluwarsa' => 0, 
+    'total_nominal' => 0,
+    'tidak_dibayar' => 0,
+    'tidak_diproses' => 0
+];
+
+$stmtKonf = $pdo->prepare("
+    SELECT COUNT(*) FROM reservasi
+    WHERE status = 'dikonfirmasi' AND YEAR(tanggal_checkin) = ?
+");
+$stmtKonf->execute([$tahun]);
+$totalKonfTahun = (int)$stmtKonf->fetchColumn();
+$totKedaluwarsa = (int)($statKedaluwarsa['total_kedaluwarsa'] ?? 0);
+$persenKed = $totalKonfTahun > 0 ? round(($totKedaluwarsa / $totalKonfTahun) * 100, 1) : 0;
 
 // Format label nama bulan untuk mempermudah render klien
 $namaBulan = [
@@ -97,7 +113,11 @@ json_response([
         'total_estimasi'      => (int)($estimasi['total_estimasi'] ?? 0),
     ],
     'kedaluwarsa' => [
-        'total_kedaluwarsa' => (int)($statKedaluwarsa['total_kedaluwarsa'] ?? 0),
+        'total_kedaluwarsa'  => $totKedaluwarsa,
         'total_nominal'      => (int)($statKedaluwarsa['total_nominal'] ?? 0),
+        'total_dikonfirmasi' => $totalKonfTahun,
+        'persen_kedaluwarsa' => $persenKed,
+        'tidak_dibayar'      => (int)($statKedaluwarsa['tidak_dibayar'] ?? 0),
+        'tidak_diproses'     => (int)($statKedaluwarsa['tidak_diproses'] ?? 0),
     ]
 ]);

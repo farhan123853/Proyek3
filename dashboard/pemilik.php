@@ -53,16 +53,35 @@ $stmtEst = $pdo->query("
 ");
 $estimasi = $stmtEst->fetch();
 
-// 3b. Statistik Kedaluwarsa (Hanya-baca, tidak masuk pemasukan & tidak memengaruhi estimasi terkonfirmasi)
+// 3b. Statistik Kedaluwarsa & Tingkat Kedaluwarsa terhadap Reservasi Dikonfirmasi
 $stmtKedaluwarsa = $pdo->prepare("
     SELECT 
         COUNT(*) AS total_kedaluwarsa,
-        COALESCE(SUM(estimasi_total), 0) AS total_nominal
+        COALESCE(SUM(estimasi_total), 0) AS total_nominal,
+        SUM(CASE WHEN batas_bayar_pada IS NOT NULL THEN 1 ELSE 0 END) AS tidak_dibayar,
+        SUM(CASE WHEN batas_bayar_pada IS NULL THEN 1 ELSE 0 END) AS tidak_diproses
     FROM reservasi 
     WHERE status = 'kedaluwarsa' AND YEAR(tanggal_checkin) = ?
 ");
 $stmtKedaluwarsa->execute([$tahun]);
-$statKedaluwarsaTahun = $stmtKedaluwarsa->fetch() ?: ['total_kedaluwarsa' => 0, 'total_nominal' => 0];
+$statKedaluwarsaTahun = $stmtKedaluwarsa->fetch() ?: [
+    'total_kedaluwarsa' => 0, 
+    'total_nominal' => 0,
+    'tidak_dibayar' => 0,
+    'tidak_diproses' => 0
+];
+
+$stmtKonfTahun = $pdo->prepare("
+    SELECT COUNT(*) FROM reservasi
+    WHERE status = 'dikonfirmasi' AND YEAR(tanggal_checkin) = ?
+");
+$stmtKonfTahun->execute([$tahun]);
+$totalKonfirmasiTahun = (int)$stmtKonfTahun->fetchColumn();
+
+$totalKedaluwarsaTahun = (int)$statKedaluwarsaTahun['total_kedaluwarsa'];
+$persenKedaluwarsa = $totalKonfirmasiTahun > 0 ? round(($totalKedaluwarsaTahun / $totalKonfirmasiTahun) * 100, 1) : 0;
+$tidakDibayarTahun = (int)($statKedaluwarsaTahun['tidak_dibayar'] ?? 0);
+$tidakDiprosesTahun = (int)($statKedaluwarsaTahun['tidak_diproses'] ?? 0);
 
 // 4. Sumber Reservasi (Online vs Offline pada tahun terpilih)
 $stmtSumber = $pdo->prepare("
@@ -542,20 +561,43 @@ if ($maxBulanNominal === 0) $maxBulanNominal = 1;
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
         <div class="flex items-center gap-2">
           <span class="w-2.5 h-2.5 rounded-full bg-stone-400"></span>
-          <h3 class="text-sm uppercase tracking-wider font-bold text-stone-700 mb-0">Reservasi Kedaluwarsa (<?= $tahun ?>)</h3>
+          <h3 class="text-sm uppercase tracking-wider font-bold text-stone-700 mb-0">Reservasi Kedaluwarsa (<span id="labelTahunKedaluwarsa"><?= $tahun ?></span>)</h3>
         </div>
-        <span class="text-xs text-stone-500 font-medium"><?= (int)$statKedaluwarsaTahun['total_kedaluwarsa'] ?> reservasi dibatalkan otomatis</span>
+        <span class="text-xs text-stone-500 font-medium"><span id="subTotalKedaluwarsa"><?= $totalKedaluwarsaTahun ?></span> reservasi dibatalkan otomatis</span>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Kartu 1: Tingkat Reservasi Kedaluwarsa -->
         <div class="bg-white border border-stone-200 rounded-xl p-4">
-          <span class="text-xs text-stone-500 font-semibold block uppercase tracking-wider mb-1">Jumlah Reservasi Kedaluwarsa</span>
-          <div class="text-2xl font-serif font-bold text-stone-700"><?= (int)$statKedaluwarsaTahun['total_kedaluwarsa'] ?></div>
-          <p class="text-[11px] text-stone-500 mt-1 mb-0">Unit kamar otomatis dilepas kembali ke kalender</p>
+          <span class="text-xs text-stone-500 font-semibold block uppercase tracking-wider mb-1"><?= t('expiration.rate_title') ?></span>
+          <div class="flex items-baseline gap-2">
+            <div id="cardKedaluwarsaTotal" class="text-2xl font-serif font-bold text-stone-800"><?= $totalKedaluwarsaTahun ?></div>
+            <span id="cardKedaluwarsaPersen" class="text-sm font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full font-mono"><?= $persenKedaluwarsa ?>%</span>
+          </div>
+          <p class="text-[11px] text-stone-500 mt-1 mb-0">
+            Terhadap <span id="cardKedaluwarsaKonf" class="font-semibold text-stone-700"><?= $totalKonfirmasiTahun ?></span> dikonfirmasi
+          </p>
         </div>
+
+        <!-- Kartu 2: Penyebab Tidak Dibayar -->
         <div class="bg-white border border-stone-200 rounded-xl p-4">
-          <span class="text-xs text-stone-500 font-semibold block uppercase tracking-wider mb-1">Estimasi Nilai Terlepas</span>
-          <div class="text-2xl font-serif font-bold text-stone-700"><?= format_rupiah($statKedaluwarsaTahun['total_nominal']) ?></div>
-          <p class="text-[11px] text-stone-500 mt-1 mb-0">Tidak masuk dalam perhitungan pemasukan aktual</p>
+          <span class="text-xs text-stone-500 font-semibold block uppercase tracking-wider mb-1"><?= t('expiration.rate_unpaid') ?></span>
+          <div id="cardKedaluwarsaTidakDibayar" class="text-2xl font-serif font-bold text-amber-900"><?= $tidakDibayarTahun ?></div>
+          <p class="text-[11px] text-stone-500 mt-1 mb-0">Lewat batas bayar (online / tunai)</p>
+        </div>
+
+        <!-- Kartu 3: Penyebab Tidak Diproses -->
+        <div class="bg-white border border-stone-200 rounded-xl p-4">
+          <span class="text-xs text-stone-500 font-semibold block uppercase tracking-wider mb-1"><?= t('expiration.rate_unprocessed') ?></span>
+          <div id="cardKedaluwarsaTidakDiproses" class="text-2xl font-serif font-bold text-stone-700"><?= $tidakDiprosesTahun ?></div>
+          <p class="text-[11px] text-stone-500 mt-1 mb-0">Lewat batas respons 48 jam</p>
+        </div>
+
+        <!-- Kartu 4: Estimasi Nilai Terlepas -->
+        <div class="bg-white border border-stone-200 rounded-xl p-4">
+          <span class="text-xs text-stone-500 font-semibold block uppercase tracking-wider mb-1">Nilai Terlepas</span>
+          <div id="cardKedaluwarsaNominal" class="text-2xl font-serif font-bold text-stone-700"><?= format_rupiah($statKedaluwarsaTahun['total_nominal']) ?></div>
+          <p class="text-[11px] text-stone-500 mt-1 mb-0">Tidak masuk pemasukan aktual</p>
         </div>
       </div>
     </div>
@@ -802,6 +844,27 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
       });
       villaContainer.innerHTML = vHtml;
+    }
+
+    // 6. Kartu Kedaluwarsa
+    if (data.kedaluwarsa) {
+      const k = data.kedaluwarsa;
+      const elLabelTahun = document.getElementById('labelTahunKedaluwarsa');
+      if (elLabelTahun) elLabelTahun.textContent = tahun;
+      const elSubTotal = document.getElementById('subTotalKedaluwarsa');
+      if (elSubTotal) elSubTotal.textContent = k.total_kedaluwarsa;
+      const elTotal = document.getElementById('cardKedaluwarsaTotal');
+      if (elTotal) elTotal.textContent = k.total_kedaluwarsa;
+      const elPersen = document.getElementById('cardKedaluwarsaPersen');
+      if (elPersen) elPersen.textContent = k.persen_kedaluwarsa + '%';
+      const elKonf = document.getElementById('cardKedaluwarsaKonf');
+      if (elKonf) elKonf.textContent = k.total_dikonfirmasi;
+      const elTidakDibayar = document.getElementById('cardKedaluwarsaTidakDibayar');
+      if (elTidakDibayar) elTidakDibayar.textContent = k.tidak_dibayar;
+      const elTidakDiproses = document.getElementById('cardKedaluwarsaTidakDiproses');
+      if (elTidakDiproses) elTidakDiproses.textContent = k.tidak_diproses;
+      const elNominal = document.getElementById('cardKedaluwarsaNominal');
+      if (elNominal) elNominal.textContent = formatRp(k.total_nominal);
     }
   }
 
