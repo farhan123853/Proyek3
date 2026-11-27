@@ -60,7 +60,8 @@ Atas arahan dan persetujuan dosen pembimbing proyek, fitur prakiraan cuaca ekste
    - Rumusan masalah dan tujuan integrasi web service cuaca digantikan dengan: *"Bagaimana merancang dan membangun modul integrasi payment gateway Midtrans dan pencatatan tunai guna mendukung otomatisasi konfirmasi pembayaran reservasi?"*
 4. **Bab 1.5 & 1.6 (Batasan Masalah)**:
    - Menghapus batasan cuaca (kode wilayah adm4, cache cuaca).
-   - Menambahkan batasan sistem pembayaran: mode sandbox Midtrans (tidak memproses dana riil), metode pembayaran dibatasi pada VA bank dan e-wallet (tanpa kartu kredit), pembayaran penuh tanpa uang muka (DP) dan tanpa sistem refund otomatis, serta pencatatan tunai manual oleh Pengelola.
+   - Menghapus keterbatasan lama "tanpa pembatalan otomatis" karena sistem kini telah memiliki modul kedaluwarsa otomatis (`expire_reservasi_lewat_batas()`).
+   - Menambahkan batasan sistem pembayaran dan siklus reservasi: mode sandbox Midtrans (tidak memproses dana riil), metode pembayaran dibatasi pada VA bank dan e-wallet (tanpa kartu kredit), pembayaran penuh tanpa uang muka (DP); pengecekan kedaluwarsa otomatis berjalan secara oportunistik (dengan throttle 60 detik) atau terjadwal via CLI (`bin/expire-reservasi.php`); serta pembayaran terlambat yang bentrok dengan jadwal kamar yang telah terisi penuh memerlukan proses pengembalian dana (*refund*) secara manual di luar gateway.
 5. **Kebutuhan Fungsional (F-02 dan F-03)**:
    - F-02 (Konsumsi API Cuaca BMKG) dan F-03 (Tampilan Widget Prakiraan Cuaca 3 Hari) dihapus dan digantikan oleh:
      - **F-15**: Pembuatan transaksi Snap token pembayaran digital (VA dan E-wallet) via Midtrans API.
@@ -158,5 +159,39 @@ Sesuai arahan dosen pembimbing skripsi/proyek, setiap transaksi pembayaran non-t
    - Menampilkan riwayat percobaan pembayaran per reservasi tanpa risiko overcounting pemasukan.
 4. **Pembaruan Pengujian (Tabel 4.2 / `docs/RENCANA_UJI.md`)**:
    - Penambahan skenario uji **T-76 s.d. T-83** yang mencakup keunikan nomor VA, pergantian metode pembayaran, penyamaran pasca-lunas, idempotensi webhook, deteksi duplikasi kode, hak akses anti-IDOR, format minimarket/WIB, dan dwibahasa petunjuk bayar.
+
+---
+
+## 8. Penyelarasan Siklus Hidup Reservasi: Batas Bayar, Status 'Kedaluwarsa', dan Audit Trail (Permintaan Dosen Pembimbing)
+
+### Latar Belakang & Identifikasi Masalah:
+Pada implementasi sebelumnya, reservasi berstatus `'dikonfirmasi'` yang tidak kunjung dilunasi tamu hanya diberi label *"Lewat batas bayar"*, namun statusnya tetap `'dikonfirmasi'` dan tanggalnya tetap terkunci di kalender hunian ("menggantung"). Dosen pembimbing mengarahkan agar **tidak ada reservasi dengan nasib tidak jelas**.
+
+### Keputusan Arsitektur & Aturan Bisnis:
+1. **Kedaluwarsa Otomatis**: Dilakukan secara otomatis oleh sistem tanpa intervensi manual staf.
+2. **Formula Batas Waktu Bayar**:
+   - **Online**: Waktu konfirmasi + `PEMBAYARAN_BATAS_JAM` (24 jam), dibatasi maksimal pukul 12:00 WIB pada hari check-in, dan tidak kurang dari 2 jam sejak konfirmasi.
+   - **Tunai di Villa**: Tamu berhak memilih opsi "Bayar tunai di villa" yang memperpanjang batas bayar hingga pukul 23:59:59 WIB pada hari check-in.
+   - **Reservasi Offline**: Reservasi walk-in/telepon yang dibuat langsung oleh staf tidak memiliki batas bayar otomatis (`batas_bayar_pada = NULL`).
+3. **Pelepasan Unit Kamar**: Hanya status `'dikonfirmasi'` yang memblokir tanggal ketersediaan. Saat status berubah menjadi `'kedaluwarsa'`, unit kamar seketika terlepas kembali ke kalender untuk tamu lain.
+
+### Pembaruan Basis Data (Migrasi `006_reservasi_kedaluwarsa.sql`):
+1. **Entitas `reservasi`**:
+   - Penambahan kolom: `batas_bayar_pada DATETIME NULL`, `rencana_bayar ENUM('online','tunai') DEFAULT 'online'`, dan `kedaluwarsa_pada DATETIME NULL`.
+   - Perluasan enum `status` menjadi: `'menunggu'`, `'dikonfirmasi'`, `'ditolak'`, `'dibatalkan'`, `'kedaluwarsa'`.
+   - Indeks komposit: `idx_reservasi_status_batas (status, batas_bayar_pada)`.
+2. **Tabel Baru `reservasi_log`**:
+   - Kolom: `id_log (PK)`, `id_reservasi (FK)`, `dari_status`, `ke_status`, `oleh_pengguna (FK, NULL=Sistem)`, `alasan`, `dibuat_pada`.
+   - Menjadi sumber kebenaran audit trail untuk seluruh mutasi status reservasi di aplikasi.
+
+### Penambahan Kebutuhan Fungsional Baru:
+- **F-24**: Penentuan dan Penyimpanan Batas Waktu Pembayaran Tersimpan (`batas_bayar_pada`).
+- **F-25**: Algoritma Kedaluwarsa Otomatis (`expire_reservasi_lewat_batas()`) dengan pemicu oportunistik (flock 60 detik) dan skrip CLI penjadwalan (`bin/expire-reservasi.php`).
+- **F-26**: Aksi Pelanggan Memilih Rencana Bayar (Tunai di Villa vs Kembali Bayar Online) terlindungi CSRF dan anti-IDOR.
+- **F-27**: Rekonsiliasi Pembayaran Terlambat (Late Payment): Reaktivasi otomatis jika kamar masih kosong vs Penanda `'ganda'` / `'perlu ditinjau'` jika kamar sudah terisi penuh.
+- **F-28**: Panel Riwayat Audit Status Reservasi (`reservasi_log`) pada dashboard Pengelola.
+
+### Pembaruan Pengujian (Tabel 4.2 / `docs/RENCANA_UJI.md`):
+- Penambahan skenario uji **T-84 s.d. T-96** (13 skenario lengkap) yang mencakup seluruh aspek algoritma batas bayar, pelepasan tanggal kalender, penundaan transaksi aktif, idempotensi, aksi bayar tunai, formula jam 12/2 jam, reaktivasi vs bentrok ganda, sinkronisasi expiry Midtrans < 5 menit, guard CLI SAPI, pencatatan log audit, anti-IDOR, dan responsivitas dwibahasa.
 
 

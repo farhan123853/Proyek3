@@ -51,8 +51,20 @@ Pelanggan adalah tamu yang telah memiliki akun terdaftar dan berhasil masuk (log
    - Status yang ditampilkan:
      - **Menunggu**: Permintaan sedang ditinjau oleh pihak pengelola.
      - **Dikonfirmasi**: Jadwal telah disetujui resmi oleh pengelola.
+     - **Kedaluwarsa**: Reservasi otomatis ditutup oleh sistem karena melewati batas waktu pembayaran tanpa pelunasan. Unit kamar dilepas kembali ke kalender.
      - **Ditolak**: Permintaan tidak dapat dipenuhi (misalnya jadwal bentrok atau unit penuh).
-   - Terdapat tombol **Tanya WA** untuk berkomunikasi langsung dengan pengelola mengenai pesanan terkait.
+     - **Dibatalkan**: Reservasi offline/manual dibatalkan oleh staf pengelola dengan alasan tercatat.
+   - **Hitung Mundur Pembayaran & Bar Progres**:
+     - Menampilkan sisa waktu bayar secara real-time yang tersinkronisasi dengan stempel waktu server (bukan waktu jam perangkat).
+     - Jika sisa waktu $\le 3\text{ jam}$, sistem menampilkan peringatan berwarna mencolok (merah) bahwa reservasi akan dibatalkan otomatis dan kamar dilepas jika belum dilunasi.
+   - **Pilihan Metode Bayar (Online vs Tunai di Villa)**:
+     - Tombol **"Bayar sekarang"**: Membuka popup pembayaran online Midtrans Snap (VA bank atau e-wallet).
+     - Tombol **"Bayar tunai di villa"**: Mengubah rencana bayar menjadi tunai dan memperpanjang batas bayar hingga akhir hari check-in (23:59 WIB). Pelanggan tetap dapat beralih kembali ke pembayaran online kapan saja sebelum batas tersebut.
+   - **Aksi Pasca-Kedaluwarsa**:
+     - Lencana abu-abu **KEDALUWARSA** beserta penjelasan waktu kedaluwarsa.
+     - Indikator ketersediaan real-time apakah tanggal yang sama saat ini masih kosong atau sudah diisi tamu lain.
+     - Tombol **"Pesan ulang tanggal yang sama"**: Mengarahkan ke formulir reservasi dengan data villa, tanggal, dan jumlah tamu yang langsung terisi otomatis (tanpa membuat pesanan otomatis).
+     - Tombol **"Hubungi via WhatsApp"** untuk bantuan layanan pelanggan.
 
 ---
 
@@ -168,5 +180,35 @@ Sistem telah dilengkapi modul penangkapan, penyimpanan, dan pemantauan nomor Vir
 - **Kolom Bank & Kode VA**: Menampilkan nomor VA lengkap secara transparan untuk keperluan audit rekonsiliasi keuangan.
 - **Filter Pencarian**: Mendukung filter pencarian instan berdasarkan kode VA, Order ID, atau nama pengguna.
 - **Audit Duplikasi**: Indikator penanda khusus akan muncul jika sistem mendeteksi ketidakwajaran nomor VA yang terdaftar pada transaksi lain.
+
+---
+
+## 7. Batas Waktu Pembayaran, Kedaluwarsa Otomatis, dan Riwayat Mutasi Status
+
+Sistem menerapkan penegakan siklus hidup reservasi yang pasti untuk memastikan **tidak ada lagi reservasi yang berstatus menggantung**:
+
+### 1. Perhitungan Batas Waktu Pembayaran:
+- **Batas Waktu Online**: Waktu konfirmasi pengelola + `PEMBAYARAN_BATAS_JAM` (24 jam), dibatasi paling lambat pukul 12:00 WIB pada hari check-in, dan tidak kurang dari 2 jam sejak konfirmasi.
+- **Batas Waktu Tunai di Villa**: Jika tamu memilih "Bayar tunai di villa", batas bayar diperpanjang hingga pukul 23:59:59 WIB pada akhir hari check-in. Pembayaran online tetap dapat dilakukan sebelum batas tersebut.
+- **Pengecualian Reservasi Offline**: Reservasi walk-in / telepon yang dikonfirmasi langsung oleh staf tidak memiliki batas bayar otomatis (`batas_bayar_pada = NULL`) agar fleksibel ditagihkan saat tamu menginap.
+
+### 2. Algoritma Kedaluwarsa Otomatis (`expire_reservasi_lewat_batas()`):
+- Sistem secara periodik mengecek reservasi berstatus `'dikonfirmasi'` yang telah melewati `batas_bayar_pada` dan belum memiliki pembayaran `'lunas'`.
+- **Perlindungan Transaksi Aktif**: Jika transaksi online di Midtrans masih dalam rentang masa berlaku, sistem menunda penutupan reservasi hingga sesi bayar gateway selesai.
+- **Penutupan Bersih**: Status reservasi diubah menjadi `'kedaluwarsa'`, transaksi pembayaran pending ditutup, dan unit kamar seketika terlepas di kalender untuk tamu lain.
+- **Pemicu Ganda**: Didukung eksekusi oportunistik (setiap 60 detik saat halaman diakses) dan eksekusi background via CLI Task Scheduler / Cron (`bin/expire-reservasi.php`).
+
+### 3. Penanganan Pembayaran Terlambat (Late Payment Reconciliation):
+- Jika notifikasi settlement Midtrans tiba untuk reservasi yang sudah kedaluwarsa:
+  - **Kamar Masih Kosong**: Sistem secara otomatis mengaktifkan kembali reservasi menjadi `'dikonfirmasi'`, mencatat pembayaran `'lunas'`, dan mencatat log reaktivasi.
+  - **Kamar Sudah Penuh**: Reservasi tetap berstatus `'kedaluwarsa'`, dan pembayaran ditandai sebagai status `'ganda'` dengan catatan *"perlu ditinjau: tanggal sudah terisi"* agar staf pengelola dan admin dapat memproses pengembalian dana (*refund*) secara manual.
+
+### 4. Panel Riwayat Mutasi Status (`reservasi_log`):
+- Pada dashboard Pengelola (`dashboard/pengelola.php`), setiap baris reservasi dilengkapi panel riwayat mutasi (*status history*) yang dapat dibuka (*collapsible*).
+- Menampilkan jejak waktu, pelaku mutasi (nama staf, nama pelanggan, atau *"Sistem"*), perubahan status dari dan ke, serta alasan perubahan status secara transparan.
+
+### 5. Tombol Pengingat & Pemberitahuan WhatsApp Dwibahasa:
+- **Pengingat WA (Aktif)**: Template pesan otomatis berbahasa Indonesia atau Inggris sesuai preferensi tamu, memuat nominal tagihan dan sisa waktu bayar.
+- **Kabari WA (Kedaluwarsa)**: Template pesan pemberitahuan ramah bahwa batas waktu pembayaran telah berakhir dan unit telah dilepas kembali ke kalender.
 
 

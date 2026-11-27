@@ -13,6 +13,8 @@ erDiagram
     PENGGUNA ||--o{ EMAIL_VERIFICATION_TOKENS : "memiliki token verifikasi"
     TIPE_VILLA ||--o{ RESERVASI : "dipesan (id_tipe)"
     RESERVASI ||--o{ PEMBAYARAN : "memiliki (id_reservasi)"
+    RESERVASI ||--o{ RESERVASI_LOG : "memiliki riwayat mutasi"
+    PENGGUNA ||--o{ RESERVASI_LOG : "mencatat mutasi (oleh_pengguna)"
     PENGGUNA ||--o{ PEMBAYARAN : "mencatat tunai (dicatat_oleh)"
     PENGGUNA ||--o{ PEMBAYARAN : "membatalkan (dibatalkan_oleh)"
 
@@ -64,7 +66,10 @@ erDiagram
         date tanggal_checkout
         int jumlah_tamu
         text catatan
-        enum status "menunggu, dikonfirmasi, ditolak, dibatalkan"
+        enum status "menunggu, dikonfirmasi, ditolak, dibatalkan, kedaluwarsa"
+        datetime batas_bayar_pada "Nullable"
+        enum rencana_bayar "online, tunai"
+        datetime kedaluwarsa_pada "Nullable"
         decimal harga_weekday_saat_pesan
         decimal harga_weekend_saat_pesan
         decimal harga_extrabed_saat_pesan
@@ -81,6 +86,16 @@ erDiagram
         int dibuat_oleh FK
         datetime dibuat_pada
         datetime dibatalkan_pada
+    }
+
+    RESERVASI_LOG {
+        int id_log PK
+        int id_reservasi FK
+        enum dari_status
+        enum ke_status
+        int oleh_pengguna FK "Nullable"
+        varchar alasan
+        datetime dibuat_pada
     }
 
     PEMBAYARAN {
