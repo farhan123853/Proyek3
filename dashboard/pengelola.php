@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi'])) {
     $idReservasi = (int)($_POST['id_reservasi'] ?? 0);
     $aksi        = trim($_POST['aksi'] ?? '');
 
-    if ($idReservasi && in_array($aksi, ['konfirmasi', 'tolak'], true)) {
+    if ($idReservasi && in_array($aksi, ['konfirmasi', 'tolak', 'batalkan_offline', 'perpanjang', 'aktifkan_kembali'], true)) {
         if ($aksi === 'tolak') {
             // PENEGAKAN ATURAN BISNIS DI SERVER:
             // Reservasi dengan pembayaran 'lunas' tidak boleh ditolak atau dibatalkan oleh Pengelola
@@ -140,6 +140,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi'])) {
                 flash_set('danger', 'Terjadi kesalahan saat membatalkan reservasi.');
                 redirect('dashboard/pengelola.php');
             }
+        } elseif ($aksi === 'perpanjang') {
+            $tambahJam = (int)($_POST['tambah_jam'] ?? 0);
+            $alasan = trim($_POST['alasan'] ?? '');
+            $res = pengelola_perpanjang_batas_bayar($idReservasi, $currentUserId, $tambahJam, $alasan, $pdo);
+            if ($res['ok']) {
+                flash_set('success', $res['pesan']);
+            } else {
+                flash_set('danger', $res['pesan']);
+            }
+            redirect('dashboard/pengelola.php');
+        } elseif ($aksi === 'aktifkan_kembali') {
+            $alasan = trim($_POST['alasan'] ?? '');
+            $res = pengelola_aktifkan_kembali_reservasi($idReservasi, $currentUserId, $alasan, $pdo);
+            if ($res['ok']) {
+                flash_set('success', $res['pesan']);
+            } else {
+                flash_set('danger', $res['pesan']);
+            }
+            redirect('dashboard/pengelola.php');
         }
     }
 }
@@ -154,7 +173,9 @@ $allowedSumber = ['online', 'walk_in', 'whatsapp', 'telepon'];
 $whereClauses = [];
 $params = [];
 
-if (in_array($filterStatus, $allowedStatus, true)) {
+if ($filterStatus === 'perlu_proses' || $filterStatus === 'menunggu') {
+    $whereClauses[] = "r.status = 'menunggu'";
+} elseif (in_array($filterStatus, $allowedStatus, true)) {
     $whereClauses[] = "r.status = ?";
     $params[] = $filterStatus;
 }
@@ -240,6 +261,23 @@ foreach ($rawList as $r) {
     $r['batas_waktu_str'] = date('d/m/Y H:i', $tsBatas) . ' WIB';
     $r['sisa_detik_bayar'] = max(0, $tsBatas - time());
     $r['rencana_bayar'] = $r['rencana_bayar'] ?? 'online';
+
+    // Evaluasi batas respons konfirmasi (status = menunggu)
+    $responsBatasJam = defined('RESPONS_BATAS_JAM') ? (int)RESPONS_BATAS_JAM : 48;
+    $tsDibuatRes = strtotime($r['dibuat_pada']);
+    $tsBatasRespons = $tsDibuatRes + ($responsBatasJam * 3600);
+    $sisaDetikRespons = $tsBatasRespons - time();
+    $r['sisa_detik_respons'] = $sisaDetikRespons;
+    $r['segera_proses'] = ($r['status'] === 'menunggu' && $sisaDetikRespons > 0 && $sisaDetikRespons < (12 * 3600));
+    if ($r['status'] === 'menunggu') {
+        if ($sisaDetikRespons > 0) {
+            $jamSisa = floor($sisaDetikRespons / 3600);
+            $menitSisa = floor(($sisaDetikRespons % 3600) / 60);
+            $r['sisa_respons_str'] = "{$jamSisa}j {$menitSisa}m";
+        } else {
+            $r['sisa_respons_str'] = "0j 0m";
+        }
+    }
 
     // Filter pembayaran client-side bila diisi
     if (!empty($filterBayar)) {
@@ -457,7 +495,7 @@ require_once __DIR__ . '/../includes/layout/head.php';
       <!-- Filter Reservasi -->
       <select name="status" class="form-control text-xs py-1.5 px-3 rounded-lg border-stone-300 w-auto" onchange="this.form.submit()">
         <option value=""><?= t('common.all') ?> Reservasi</option>
-        <option value="menunggu" <?= $filterStatus === 'menunggu' ? 'selected' : '' ?>><?= t('my_bookings.status_menunggu') ?> (<?= $statMenunggu ?>)</option>
+        <option value="perlu_proses" <?= ($filterStatus === 'perlu_proses' || $filterStatus === 'menunggu') ? 'selected' : '' ?>><?= t('expiration.filter_need_process') ?> (<?= $statMenunggu ?>)</option>
         <option value="dikonfirmasi" <?= $filterStatus === 'dikonfirmasi' ? 'selected' : '' ?>><?= t('my_bookings.status_dikonfirmasi') ?> (<?= $statKonfirmasi ?>)</option>
         <option value="ditolak" <?= $filterStatus === 'ditolak' ? 'selected' : '' ?>><?= t('common.cancel') ?> (<?= $statDitolak ?>)</option>
         <option value="dibatalkan" <?= $filterStatus === 'dibatalkan' ? 'selected' : '' ?>><?= e(t('my_bookings.status_dibatalkan')) ?> (<?= $statDibatalkan ?>)</option>
@@ -565,7 +603,19 @@ require_once __DIR__ . '/../includes/layout/head.php';
                   <span class="badge-status status-<?= e($r['status']) ?> text-xs px-2.5 py-0.5 rounded-full font-semibold">
                     <?= e(format_status_reservasi($r['status'])) ?>
                   </span>
-                  <?php if ($r['status'] === 'kedaluwarsa'): ?>
+                  <?php if ($r['status'] === 'menunggu'): ?>
+                    <?php if (!empty($r['segera_proses'])): ?>
+                      <div class="mt-1">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
+                          <svg class="w-3 h-3 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                          <span><?= e(t('expiration.badge_urgent_process')) ?></span>
+                        </span>
+                      </div>
+                    <?php endif; ?>
+                    <?php if (!empty($r['sisa_respons_str'])): ?>
+                      <div class="text-[10px] text-stone-500 mt-0.5">Sisa: <?= e($r['sisa_respons_str']) ?></div>
+                    <?php endif; ?>
+                  <?php elseif ($r['status'] === 'kedaluwarsa'): ?>
                     <div class="text-[10px] text-stone-500 mt-1">Oleh: <?= e(t('payment.system_user')) ?></div>
                     <?php if (!empty($r['kedaluwarsa_pada'])): ?>
                       <div class="text-[10px] text-stone-400 mt-0.5"><?= e(date('d/m/Y H:i', strtotime($r['kedaluwarsa_pada']))) ?> WIB</div>
@@ -631,6 +681,25 @@ require_once __DIR__ . '/../includes/layout/head.php';
                       </form>
 
                     <?php elseif ($r['status'] === 'dikonfirmasi'): ?>
+                      <!-- Tombol Perpanjang Batas Bayar jika belum lunas -->
+                      <?php if (!$isLunas): ?>
+                        <?php if ((int)($r['perpanjang_kali'] ?? 0) < 2): ?>
+                          <button type="button" class="btn btn-sm btn-ghost text-xs py-1 px-2 border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 btn-open-extend-modal"
+                            data-id="<?= $idRes ?>"
+                            data-kode="#RSV-<?= $idRes ?>"
+                            data-perpanjang-kali="<?= (int)($r['perpanjang_kali'] ?? 0) ?>"
+                            data-batas="<?= e($r['batas_waktu_str']) ?>"
+                            title="Perpanjang Batas Bayar (+12/+24 jam)">
+                            <svg class="w-3.5 h-3.5 text-amber-600 shrink-0 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span><?= t('expiration.btn_extend') ?></span>
+                          </button>
+                        <?php else: ?>
+                          <span class="text-[11px] text-stone-400 border border-stone-200 px-2 py-0.5 rounded" title="Batas maksimal 2 kali perpanjangan telah tercapai">
+                            <?= t('expiration.max_extended_reached') ?>
+                          </span>
+                        <?php endif; ?>
+                      <?php endif; ?>
+
                       <!-- Tombol Catat Pembayaran Tunai jika belum lunas -->
                       <?php if (!$isLunas): ?>
                         <button type="button" class="btn btn-sm btn-gold btn-open-cash-modal text-xs py-1 px-2" data-id="<?= $idRes ?>" data-nama="<?= e($r['nama_pelanggan']) ?>" data-nominal="<?= (int)$r['estimasi_total'] ?>" data-nominal-fmt="<?= format_rupiah($r['estimasi_total']) ?>">
@@ -659,6 +728,15 @@ require_once __DIR__ . '/../includes/layout/head.php';
                       <?php endif; ?>
 
                     <?php elseif ($r['status'] === 'kedaluwarsa'): ?>
+                      <!-- Tombol Aktifkan Kembali -->
+                      <button type="button" class="btn btn-sm btn-ghost text-xs py-1 px-2 border border-blue-300 bg-blue-50 text-blue-900 hover:bg-blue-100 btn-open-reactivate-modal"
+                        data-id="<?= $idRes ?>"
+                        data-kode="#RSV-<?= $idRes ?>"
+                        title="Aktifkan kembali reservasi menjadi dikonfirmasi">
+                        <svg class="w-3.5 h-3.5 text-blue-600 shrink-0 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <span><?= t('expiration.btn_reactivate') ?></span>
+                      </button>
+
                       <a href="<?= e($r['wa_expired_url']) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost text-xs py-1 px-2 border border-stone-300 inline-flex items-center gap-1 text-stone-700 hover:bg-stone-50" title="<?= e(t('payment.wa_inform_expired')) ?>">
                         <svg class="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.288.043.088.072.191.014.306-.058.115-.087.187-.173.289l-.26.302c-.087.087-.179.182-.077.357.101.174.451.744.969 1.205.666.594 1.229.778 1.403.865.174.087.275.072.376-.043.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.073.043.419-.101.824z"/></svg>
                         <span><?= e(t('payment.wa_inform_expired')) ?></span>
@@ -699,7 +777,16 @@ require_once __DIR__ . '/../includes/layout/head.php';
               <span class="badge-status status-<?= e($r['status']) ?> text-[10px] px-2 py-0.5 rounded-full font-semibold">
                 <?= e(format_status_reservasi($r['status'])) ?>
               </span>
-              <?php if ($r['status'] === 'kedaluwarsa'): ?>
+              <?php if ($r['status'] === 'menunggu'): ?>
+                <?php if (!empty($r['segera_proses'])): ?>
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
+                    <span><?= e(t('expiration.badge_urgent_process')) ?></span>
+                  </span>
+                <?php endif; ?>
+                <?php if (!empty($r['sisa_respons_str'])): ?>
+                  <span class="text-[10px] text-stone-500">Sisa: <?= e($r['sisa_respons_str']) ?></span>
+                <?php endif; ?>
+              <?php elseif ($r['status'] === 'kedaluwarsa'): ?>
                 <span class="text-[10px] text-stone-500">Oleh: <?= e(t('payment.system_user')) ?></span>
                 <?php if (!empty($r['kedaluwarsa_pada'])): ?>
                   <span class="text-[10px] text-stone-400"><?= e(date('d/m/Y H:i', strtotime($r['kedaluwarsa_pada']))) ?> WIB</span>
@@ -755,6 +842,20 @@ require_once __DIR__ . '/../includes/layout/head.php';
               </form>
             <?php elseif ($r['status'] === 'dikonfirmasi'): ?>
               <?php if (!$isLunas): ?>
+                <?php if ((int)($r['perpanjang_kali'] ?? 0) < 2): ?>
+                  <button type="button" class="btn btn-sm btn-ghost text-xs py-1.5 px-2.5 border border-amber-300 bg-amber-50 text-amber-900 btn-open-extend-modal"
+                    data-id="<?= $idRes ?>"
+                    data-kode="#RSV-<?= $idRes ?>"
+                    data-perpanjang-kali="<?= (int)($r['perpanjang_kali'] ?? 0) ?>"
+                    data-batas="<?= e($r['batas_waktu_str']) ?>">
+                    <svg class="w-3.5 h-3.5 text-amber-600 shrink-0 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span><?= t('expiration.btn_extend') ?></span>
+                  </button>
+                <?php else: ?>
+                  <span class="text-[11px] text-stone-400 border border-stone-200 px-2 py-0.5 rounded">
+                    <?= t('expiration.max_extended_reached') ?>
+                  </span>
+                <?php endif; ?>
                 <button type="button" class="btn btn-sm btn-gold btn-open-cash-modal text-xs py-1.5 px-3" data-id="<?= $idRes ?>" data-nama="<?= e($r['nama_pelanggan']) ?>" data-nominal="<?= (int)$r['estimasi_total'] ?>" data-nominal-fmt="<?= format_rupiah($r['estimasi_total']) ?>">
                   <?= t('payment.btn_record_cash') ?>
                 </button>
@@ -764,6 +865,13 @@ require_once __DIR__ . '/../includes/layout/head.php';
                 <span><?= !$isLunas ? e(t('payment.wa_reminder')) : 'WhatsApp' ?></span>
               </a>
             <?php elseif ($r['status'] === 'kedaluwarsa'): ?>
+              <!-- Tombol Aktifkan Kembali Mobile -->
+              <button type="button" class="btn btn-sm btn-ghost text-xs py-1.5 px-2.5 border border-blue-300 bg-blue-50 text-blue-900 btn-open-reactivate-modal"
+                data-id="<?= $idRes ?>"
+                data-kode="#RSV-<?= $idRes ?>">
+                <svg class="w-3.5 h-3.5 text-blue-600 shrink-0 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                <span><?= t('expiration.btn_reactivate') ?></span>
+              </button>
               <a href="<?= e($r['wa_expired_url']) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-ghost text-xs py-1.5 px-2.5 border border-stone-300 inline-flex items-center gap-1 text-stone-700">
                 <svg class="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.288.043.088.072.191.014.306-.058.115-.087.187-.173.289l-.26.302c-.087.087-.179.182-.077.357.101.174.451.744.969 1.205.666.594 1.229.778 1.403.865.174.087.275.072.376-.043.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.073.043.419-.101.824z"/></svg>
                 <span><?= e(t('payment.wa_inform_expired')) ?></span>
@@ -1021,6 +1129,87 @@ require_once __DIR__ . '/../includes/layout/head.php';
   </div>
 </div>
 
+<!-- Modal Perpanjang Batas Bayar -->
+<div id="modal-perpanjang" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title-perpanjang">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-150">
+    <div class="flex items-center justify-between pb-3 border-b border-stone-200 mb-4">
+      <h3 class="font-serif text-lg font-bold text-stone-900" id="modal-title-perpanjang"><?= t('expiration.modal_extend_title') ?></h3>
+      <button type="button" class="text-stone-400 hover:text-stone-700 text-xl font-bold p-1 close-modal-perpanjang" aria-label="Tutup">&times;</button>
+    </div>
+
+    <form method="POST" action="dashboard/pengelola.php" id="form-perpanjang">
+      <?= csrf_field() ?>
+      <input type="hidden" id="modal-perpanjang-id" name="id_reservasi" value="" />
+      <input type="hidden" name="aksi" value="perpanjang" />
+
+      <div class="space-y-4 text-xs">
+        <div class="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-1">
+          <div><strong>Reservasi:</strong> <span id="modal-perpanjang-kode">-</span></div>
+          <div><strong>Batas Saat Ini:</strong> <span id="modal-perpanjang-batas">-</span></div>
+          <div><strong>Perpanjangan:</strong> <span id="modal-perpanjang-info" class="font-semibold text-amber-900">-</span></div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-stone-700 mb-1.5"><?= t('expiration.label_extend_hours') ?></label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex items-center gap-2 p-2.5 border border-stone-300 rounded-xl cursor-pointer hover:bg-stone-50 has-[:checked]:border-amber-700 has-[:checked]:bg-amber-50">
+              <input type="radio" name="tambah_jam" value="12" class="text-amber-800 focus:ring-amber-800" checked />
+              <span class="font-medium text-stone-800"><?= t('expiration.extend_hours_12') ?></span>
+            </label>
+            <label class="flex items-center gap-2 p-2.5 border border-stone-300 rounded-xl cursor-pointer hover:bg-stone-50 has-[:checked]:border-amber-700 has-[:checked]:bg-amber-50">
+              <input type="radio" name="tambah_jam" value="24" class="text-amber-800 focus:ring-amber-800" />
+              <span class="font-medium text-stone-800"><?= t('expiration.extend_hours_24') ?></span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label for="modal-perpanjang-alasan" class="block text-xs font-semibold text-stone-700 mb-1"><?= t('expiration.label_extend_reason') ?> <span class="text-rose-600">*</span></label>
+          <textarea id="modal-perpanjang-alasan" name="alasan" rows="3" maxlength="200" required placeholder="Contoh: Tamu meminta waktu tambahan karena kendala ATM/bank..." class="form-control text-xs w-full rounded-lg border-stone-300"></textarea>
+        </div>
+      </div>
+
+      <div class="mt-6 flex items-center justify-end gap-3 pt-3 border-t border-stone-100">
+        <button type="button" class="btn btn-sm btn-ghost text-xs py-2 px-4 close-modal-perpanjang">Batal</button>
+        <button type="submit" class="btn btn-sm btn-gold text-xs py-2 px-5">Simpan Perpanjangan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Aktifkan Kembali Reservasi Kedaluwarsa -->
+<div id="modal-aktifkan" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title-aktifkan">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-150">
+    <div class="flex items-center justify-between pb-3 border-b border-stone-200 mb-4">
+      <h3 class="font-serif text-lg font-bold text-stone-900" id="modal-title-aktifkan"><?= t('expiration.modal_reactivate_title') ?></h3>
+      <button type="button" class="text-stone-400 hover:text-stone-700 text-xl font-bold p-1 close-modal-aktifkan" aria-label="Tutup">&times;</button>
+    </div>
+
+    <form method="POST" action="dashboard/pengelola.php" id="form-aktifkan">
+      <?= csrf_field() ?>
+      <input type="hidden" id="modal-aktifkan-id" name="id_reservasi" value="" />
+      <input type="hidden" name="aksi" value="aktifkan_kembali" />
+
+      <div class="space-y-4 text-xs">
+        <div class="p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-blue-900 leading-relaxed">
+          <p class="mb-1 font-semibold">Konfirmasi Reaktivasi:</p>
+          <p class="mb-0 text-[11px] text-blue-800">Sistem akan memeriksa ketersediaan tanggal terlebih dahulu secara transaksional. Jika kamar masih kosong, status akan kembali menjadi <strong>Dikonfirmasi</strong> dengan batas bayar baru <strong>24 jam</strong> dari sekarang.</p>
+        </div>
+
+        <div>
+          <label for="modal-aktifkan-alasan" class="block text-xs font-semibold text-stone-700 mb-1"><?= t('expiration.label_reactivate_reason') ?></label>
+          <textarea id="modal-aktifkan-alasan" name="alasan" rows="2" maxlength="200" placeholder="Contoh: Tamu menghubungi via WhatsApp untuk melanjutkan pesanan..." class="form-control text-xs w-full rounded-lg border-stone-300"></textarea>
+        </div>
+      </div>
+
+      <div class="mt-6 flex items-center justify-end gap-3 pt-3 border-t border-stone-100">
+        <button type="button" class="btn btn-sm btn-ghost text-xs py-2 px-4 close-modal-aktifkan">Batal</button>
+        <button type="submit" class="btn btn-sm btn-success text-xs py-2 px-5">Aktifkan Kembali</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const modalTunai = document.getElementById('modal-catat-tunai');
@@ -1060,10 +1249,55 @@ document.addEventListener('DOMContentLoaded', function() {
     btnSubmitTunai.disabled = !this.checked;
   });
 
-  // Tutup Modal
+  // Tutup Modal Tunai
   document.querySelectorAll('.close-modal-tunai').forEach(function(btn) {
     btn.addEventListener('click', function() {
       modalTunai.classList.add('hidden');
+    });
+  });
+
+  // Modal Perpanjang Batas Bayar
+  const modalPerpanjang = document.getElementById('modal-perpanjang');
+  document.querySelectorAll('.btn-open-extend-modal').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const id = btn.getAttribute('data-id');
+      const kode = btn.getAttribute('data-kode') || ('#RSV-' + id);
+      const batas = btn.getAttribute('data-batas') || '-';
+      const perpanjangKali = parseInt(btn.getAttribute('data-perpanjang-kali') || '0', 10);
+
+      document.getElementById('modal-perpanjang-id').value = id;
+      document.getElementById('modal-perpanjang-kode').textContent = kode;
+      document.getElementById('modal-perpanjang-batas').textContent = batas;
+      document.getElementById('modal-perpanjang-info').textContent = 'Perpanjangan ke-' + (perpanjangKali + 1) + ' dari maks 2 kali';
+      document.getElementById('modal-perpanjang-alasan').value = '';
+
+      modalPerpanjang.classList.remove('hidden');
+    });
+  });
+
+  document.querySelectorAll('.close-modal-perpanjang').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      modalPerpanjang.classList.add('hidden');
+    });
+  });
+
+  // Modal Aktifkan Kembali Reservasi
+  const modalAktifkan = document.getElementById('modal-aktifkan');
+  document.querySelectorAll('.btn-open-reactivate-modal').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const id = btn.getAttribute('data-id');
+      const kode = btn.getAttribute('data-kode') || ('#RSV-' + id);
+
+      document.getElementById('modal-aktifkan-id').value = id;
+      document.getElementById('modal-aktifkan-alasan').value = '';
+
+      modalAktifkan.classList.remove('hidden');
+    });
+  });
+
+  document.querySelectorAll('.close-modal-aktifkan').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      modalAktifkan.classList.add('hidden');
     });
   });
 
@@ -1725,6 +1959,8 @@ document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('modalOffline')?.classList.add('hidden');
       document.getElementById('modalBlokir')?.classList.add('hidden');
       document.getElementById('modal-catat-tunai')?.classList.add('hidden');
+      document.getElementById('modal-perpanjang')?.classList.add('hidden');
+      document.getElementById('modal-aktifkan')?.classList.add('hidden');
     }
   });
 })();

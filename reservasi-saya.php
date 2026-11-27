@@ -517,7 +517,11 @@ require_once __DIR__ . '/includes/layout/head.php';
                     <?php endif; ?>
                   </div>
                   <p class="text-stone-600 mb-0">
-                    <?= e(t('my_bookings.expired_desc', ['waktu' => $waktuKedaluwarsaStr])) ?>
+                    <?php if (empty($r['batas_bayar_pada'])): ?>
+                      <?= e(t('expiration.expired_not_processed_desc')) ?>
+                    <?php else: ?>
+                      <?= e(t('my_bookings.expired_desc', ['waktu' => $waktuKedaluwarsaStr])) ?>
+                    <?php endif; ?>
                   </p>
                 </div>
                 <div class="flex items-center gap-2 flex-wrap shrink-0">
