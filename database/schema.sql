@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS `reservasi` (
   `batas_bayar_pada` DATETIME NULL,
   `rencana_bayar` ENUM('online', 'tunai') NOT NULL DEFAULT 'online',
   `kedaluwarsa_pada` DATETIME NULL,
+  `perpanjang_kali` TINYINT NOT NULL DEFAULT 0,
   `harga_weekday_saat_pesan` DECIMAL(12,2) NOT NULL,
   `harga_weekend_saat_pesan` DECIMAL(12,2) NOT NULL,
   `harga_extrabed_saat_pesan` DECIMAL(12,2) NOT NULL,

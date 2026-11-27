@@ -70,6 +70,7 @@ erDiagram
         datetime batas_bayar_pada "Nullable"
         enum rencana_bayar "online, tunai"
         datetime kedaluwarsa_pada "Nullable"
+        tinyint perpanjang_kali "Default 0"
         decimal harga_weekday_saat_pesan
         decimal harga_weekend_saat_pesan
         decimal harga_extrabed_saat_pesan
@@ -184,6 +185,7 @@ Menyimpan transaksi permohonan reservasi villa baik secara online oleh pelanggan
 | `batas_bayar_pada` | `DATETIME` | Yes | Batas waktu pembayaran resmi (WIB) |
 | `rencana_bayar` | `ENUM` | No | Pilihan kanal pelunasan tamu: `'online'`, `'tunai'` (default: `'online'`) |
 | `kedaluwarsa_pada` | `DATETIME` | Yes | Waktu aktual reservasi ditutup otomatis karena lewat batas bayar (WIB) |
+| `perpanjang_kali` | `TINYINT` | No | Frekuensi perpanjangan batas bayar oleh pengelola (default: 0, maks: 2) |
 | `harga_weekday_saat_pesan` | `DECIMAL(12,2)` | No | Snapshot tarif weekday saat transaksi dibuat |
 | `harga_weekend_saat_pesan` | `DECIMAL(12,2)` | No | Snapshot tarif weekend saat transaksi dibuat |
 | `harga_extrabed_saat_pesan` | `DECIMAL(12,2)` | No | Snapshot tarif extra bed saat transaksi dibuat |
