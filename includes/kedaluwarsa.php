@@ -250,6 +250,81 @@ function expire_reservasi_lewat_batas(?PDO $pdo = null, int $limit = 50): array
         }
     }
 
+    // Ambil kandidat reservasi 'menunggu' yang melewati batas waktu respons konfirmasi (RESPONS_BATAS_JAM)
+    $responsBatasJam = defined('RESPONS_BATAS_JAM') ? (int)RESPONS_BATAS_JAM : 48;
+    $stmtMenunggu = $pdo->prepare("
+        SELECT r.id_reservasi, r.id_tipe, r.dibuat_pada
+        FROM `reservasi` r
+        WHERE r.`status` = 'menunggu'
+          AND r.`dibuat_pada` <= DATE_SUB(NOW(), INTERVAL :responsJam HOUR)
+        ORDER BY r.`dibuat_pada` ASC
+        LIMIT :limit
+    ");
+    $stmtMenunggu->bindValue(':responsJam', $responsBatasJam, PDO::PARAM_INT);
+    $stmtMenunggu->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmtMenunggu->execute();
+    $candidatesMenunggu = $stmtMenunggu->fetchAll(PDO::FETCH_ASSOC);
+
+    $hasil['diperiksa'] += count($candidatesMenunggu);
+
+    foreach ($candidatesMenunggu as $candM) {
+        $idResM = (int)$candM['id_reservasi'];
+
+        $startedTx = false;
+        if (!$pdo->inTransaction()) {
+            $pdo->beginTransaction();
+            $startedTx = true;
+        }
+
+        try {
+            $stmtLockM = $pdo->prepare("SELECT * FROM `reservasi` WHERE `id_reservasi` = ? FOR UPDATE");
+            $stmtLockM->execute([$idResM]);
+            $resMCurrent = $stmtLockM->fetch(PDO::FETCH_ASSOC);
+
+            if (!$resMCurrent || $resMCurrent['status'] !== 'menunggu') {
+                if ($startedTx && $pdo->inTransaction()) $pdo->commit();
+                $hasil['dilewati']++;
+                continue;
+            }
+
+            // Tutup reservasi menjadi 'kedaluwarsa'
+            $stmtExpireM = $pdo->prepare("
+                UPDATE `reservasi`
+                SET `status` = 'kedaluwarsa',
+                    `kedaluwarsa_pada` = NOW()
+                WHERE `id_reservasi` = ? AND `status` = 'menunggu'
+            ");
+            $stmtExpireM->execute([$idResM]);
+
+            if ($stmtExpireM->rowCount() === 1) {
+                // Catat log audit sistem dengan alasan: tidak diproses tepat waktu
+                catat_reservasi_log(
+                    $pdo,
+                    $idResM,
+                    'menunggu',
+                    'kedaluwarsa',
+                    null,
+                    'tidak diproses tepat waktu'
+                );
+
+                $hasil['kedaluwarsa']++;
+                $hasil['ids'][] = $idResM;
+            } else {
+                $hasil['dilewati']++;
+            }
+
+            if ($startedTx && $pdo->inTransaction()) {
+                $pdo->commit();
+            }
+        } catch (\Exception $e) {
+            if ($startedTx && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log("Error saat memproses expire reservasi menunggu #{$idResM}: " . $e->getMessage());
+            $hasil['dilewati']++;
+        }
+    }
+
     return $hasil;
 }
 
@@ -431,5 +506,225 @@ function pelanggan_kembali_bayar_online(int $idReservasi, int $idPelanggan): arr
     } catch (\Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         return ['ok' => false, 'pesan' => 'Terjadi kesalahan sistem saat memilih bayar online: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * Aksi Pengelola: Memperpanjang batas waktu pembayaran reservasi (+12 atau +24 jam)
+ * Maksimal 2 kali per reservasi, alasan wajib diisi, dan tercatat di reservasi_log.
+ *
+ * @param int         $idReservasi
+ * @param int         $idPengelola
+ * @param int         $tambahJam   Pilihan jam: 12 atau 24
+ * @param string      $alasan      Alasan perpanjangan (wajib diisi)
+ * @param PDO|null    $pdo
+ * @return array{ok:bool, pesan:string, batas_baru?:string, perpanjang_kali?:int}
+ */
+function pengelola_perpanjang_batas_bayar(
+    int $idReservasi,
+    int $idPengelola,
+    int $tambahJam,
+    string $alasan,
+    ?PDO $pdo = null
+): array {
+    if ($pdo === null) {
+        $pdo = get_db();
+    }
+
+    $tambahJam = (int)$tambahJam;
+    if ($tambahJam !== 12 && $tambahJam !== 24) {
+        return ['ok' => false, 'pesan' => 'Pilihan perpanjangan hanya boleh 12 atau 24 jam.'];
+    }
+
+    $alasan = trim($alasan);
+    if ($alasan === '') {
+        return ['ok' => false, 'pesan' => 'Alasan perpanjangan batas bayar wajib diisi.'];
+    }
+
+    $startedTx = false;
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+        $startedTx = true;
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM `reservasi` WHERE `id_reservasi` = ? FOR UPDATE");
+        $stmt->execute([$idReservasi]);
+        $r = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$r) {
+            if ($startedTx && $pdo->inTransaction()) $pdo->rollBack();
+            return ['ok' => false, 'pesan' => 'Reservasi tidak ditemukan.'];
+        }
+
+        if ($r['status'] !== 'dikonfirmasi') {
+            if ($startedTx && $pdo->inTransaction()) $pdo->rollBack();
+            return ['ok' => false, 'pesan' => 'Hanya reservasi berstatus dikonfirmasi yang dapat diperpanjang batas bayarnya.'];
+        }
+
+        // Periksa apakah sudah lunas
+        $stmtLunas = $pdo->prepare("SELECT 1 FROM `pembayaran` WHERE `id_reservasi` = ? AND `status` = 'lunas' LIMIT 1");
+        $stmtLunas->execute([$idReservasi]);
+        if ($stmtLunas->fetch()) {
+            if ($startedTx && $pdo->inTransaction()) $pdo->rollBack();
+            return ['ok' => false, 'pesan' => 'Reservasi sudah lunas dan tidak dapat diperpanjang.'];
+        }
+
+        $perpanjangKali = (int)($r['perpanjang_kali'] ?? 0);
+        if ($perpanjangKali >= 2) {
+            if ($startedTx && $pdo->inTransaction()) $pdo->rollBack();
+            return ['ok' => false, 'pesan' => 'Batas maksimal perpanjangan (2 kali) telah tercapai untuk reservasi ini.'];
+        }
+
+        // Hitung batas bayar baru: waktu basis (maksimal antara batas sekarang atau waktu saat ini) + tambahJam
+        $basisTs = max(time(), !empty($r['batas_bayar_pada']) ? strtotime($r['batas_bayar_pada']) : time());
+        $batasBaru = date('Y-m-d H:i:s', $basisTs + ($tambahJam * 3600));
+        $perpanjangKe = $perpanjangKali + 1;
+
+        $stmtUp = $pdo->prepare("
+            UPDATE `reservasi`
+            SET `batas_bayar_pada` = ?,
+                `perpanjang_kali` = ?
+            WHERE `id_reservasi` = ?
+        ");
+        $stmtUp->execute([$batasBaru, $perpanjangKe, $idReservasi]);
+
+        catat_reservasi_log(
+            $pdo,
+            $idReservasi,
+            'dikonfirmasi',
+            'dikonfirmasi',
+            $idPengelola,
+            "Perpanjangan batas bayar (+{$tambahJam} jam, ke-{$perpanjangKe}): {$alasan}"
+        );
+
+        if ($startedTx && $pdo->inTransaction()) {
+            $pdo->commit();
+        }
+
+        return [
+            'ok'              => true,
+            'pesan'           => "Batas bayar berhasil diperpanjang +{$tambahJam} jam (ke-{$perpanjangKe}).",
+            'batas_baru'      => $batasBaru,
+            'perpanjang_kali' => $perpanjangKe
+        ];
+    } catch (\Exception $e) {
+        if ($startedTx && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log("Gagal memperpanjang batas bayar #{$idReservasi}: " . $e->getMessage());
+        return ['ok' => false, 'pesan' => 'Terjadi kesalahan sistem saat memperpanjang batas bayar.'];
+    }
+}
+
+/**
+ * Aksi Pengelola: Mengaktifkan kembali reservasi kedaluwarsa menjadi dikonfirmasi
+ * Menjalankan hitung_ketersediaan() dalam transaksi dengan kunci tipe villa.
+ * Jika tanggal sudah terisi -> gagal dengan pesan menyebut tanggal terisi.
+ * Jika berhasil -> status 'dikonfirmasi', batas bayar baru = sekarang + 24 jam, tercatat di log.
+ *
+ * @param int         $idReservasi
+ * @param int         $idPengelola
+ * @param string|null $alasan
+ * @param PDO|null    $pdo
+ * @return array{ok:bool, pesan:string, batas_baru?:string}
+ */
+function pengelola_aktifkan_kembali_reservasi(
+    int $idReservasi,
+    int $idPengelola,
+    ?string $alasan = null,
+    ?PDO $pdo = null
+): array {
+    if ($pdo === null) {
+        $pdo = get_db();
+    }
+
+    $startedTx = false;
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+        $startedTx = true;
+    }
+
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM `reservasi` WHERE `id_reservasi` = ? FOR UPDATE");
+        $stmt->execute([$idReservasi]);
+        $r = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$r) {
+            if ($startedTx && $pdo->inTransaction()) $pdo->rollBack();
+            return ['ok' => false, 'pesan' => 'Reservasi tidak ditemukan.'];
+        }
+
+        if ($r['status'] !== 'kedaluwarsa') {
+            if ($startedTx && $pdo->inTransaction()) $pdo->rollBack();
+            return ['ok' => false, 'pesan' => 'Hanya reservasi berstatus kedaluwarsa yang dapat diaktifkan kembali.'];
+        }
+
+        // Kunci tipe villa mutex
+        $stmtVillaLock = $pdo->prepare("SELECT `id_tipe`, `jumlah_unit` FROM `tipe_villa` WHERE `id_tipe` = ? FOR UPDATE");
+        $stmtVillaLock->execute([$r['id_tipe']]);
+        $stmtVillaLock->fetch();
+
+        // Jalankan hitung_ketersediaan()
+        $ketersediaan = hitung_ketersediaan((int)$r['id_tipe'], $r['tanggal_checkin'], $r['tanggal_checkout'], $pdo);
+        $tglPenuh = [];
+        if (!empty($ketersediaan['malam'])) {
+            foreach ($ketersediaan['malam'] as $tgl => $malam) {
+                if (($malam['status'] ?? '') === 'penuh') {
+                    $tglPenuh[] = $tgl;
+                }
+            }
+        }
+
+        if (!empty($tglPenuh)) {
+            if ($startedTx && $pdo->inTransaction()) $pdo->rollBack();
+            $daftarTgl = implode(', ', $tglPenuh);
+            return [
+                'ok'    => false,
+                'pesan' => "Gagal mengaktifkan kembali: tanggal {$daftarTgl} sudah terisi oleh reservasi lain."
+            ];
+        }
+
+        // Berhasil: batas bayar baru = sekarang + 24 jam
+        $batasBaru = date('Y-m-d H:i:s', time() + (24 * 3600));
+
+        $stmtUp = $pdo->prepare("
+            UPDATE `reservasi`
+            SET `status` = 'dikonfirmasi',
+                `batas_bayar_pada` = ?,
+                `kedaluwarsa_pada` = NULL,
+                `perpanjang_kali` = 0
+            WHERE `id_reservasi` = ?
+        ");
+        $stmtUp->execute([$batasBaru, $idReservasi]);
+
+        $logAlasan = !empty($alasan)
+            ? "Diaktifkan kembali oleh pengelola: " . trim($alasan)
+            : "Diaktifkan kembali oleh pengelola: batas bayar baru 24 jam";
+
+        catat_reservasi_log(
+            $pdo,
+            $idReservasi,
+            'kedaluwarsa',
+            'dikonfirmasi',
+            $idPengelola,
+            $logAlasan
+        );
+
+        if ($startedTx && $pdo->inTransaction()) {
+            $pdo->commit();
+        }
+
+        return [
+            'ok'         => true,
+            'pesan'      => 'Reservasi berhasil diaktifkan kembali menjadi dikonfirmasi.',
+            'batas_baru' => $batasBaru
+        ];
+    } catch (\Exception $e) {
+        if ($startedTx && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log("Gagal mengaktifkan kembali reservasi #{$idReservasi}: " . $e->getMessage());
+        return ['ok' => false, 'pesan' => 'Terjadi kesalahan sistem saat mengaktifkan kembali reservasi.'];
     }
 }

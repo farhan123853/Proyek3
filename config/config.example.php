@@ -23,6 +23,7 @@ return [
     'PEMBAYARAN_BATAS_JAM'         => 24,
     'PEMBAYARAN_BATAS_MIN_JAM'     => 2,
     'PEMBAYARAN_CHECKIN_BATAS_JAM' => 12,
+    'RESPONS_BATAS_JAM'            => 48,
 
     // ── Aplikasi & URL ───────────────────────────────────────
     // Digunakan sebagai <base href="..."> untuk konsistensi tautan dan path aset.

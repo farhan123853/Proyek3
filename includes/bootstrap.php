@@ -53,6 +53,9 @@ if (!defined('PEMBAYARAN_BATAS_MIN_JAM')) {
 if (!defined('PEMBAYARAN_CHECKIN_BATAS_JAM')) {
     define('PEMBAYARAN_CHECKIN_BATAS_JAM', (int)($config['PEMBAYARAN_CHECKIN_BATAS_JAM'] ?? 12));
 }
+if (!defined('RESPONS_BATAS_JAM')) {
+    define('RESPONS_BATAS_JAM', (int)($config['RESPONS_BATAS_JAM'] ?? 48));
+}
 
 // 4. Tentukan BASE_URL untuk <base href="...">
 if (!defined('BASE_URL')) {
