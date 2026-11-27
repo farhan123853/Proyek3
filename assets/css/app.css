@@ -297,6 +297,18 @@
   border: 1px solid #FCA5A5;
 }
 
+.badge-status.status-dibatalkan {
+  background: #FEE2E2;
+  color: #991B1B;
+  border: 1px solid #FCA5A5;
+}
+
+.badge-status.status-kedaluwarsa {
+  background: #F3F4F6;
+  color: #6B7280;
+  border: 1px solid #D1D5DB;
+}
+
 .badge-status.status-aktif {
   background: #D1FAE5;
   color: #065F46;

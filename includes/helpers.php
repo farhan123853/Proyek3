@@ -366,6 +366,8 @@ function format_status_reservasi(string $status): string
             return t('my_bookings.status_selesai');
         case 'dibatalkan':
             return t('my_bookings.status_dibatalkan');
+        case 'kedaluwarsa':
+            return t('my_bookings.status_kedaluwarsa');
         default:
             return ucfirst($status);
     }
@@ -869,7 +871,7 @@ function proses_status_transaksi_midtrans(string $orderId, array $statusData): a
         }
 
         // 3. Kunci baris reservasi terkait
-        $stmtR = $db->prepare("SELECT id_reservasi, status FROM reservasi WHERE id_reservasi = ? FOR UPDATE");
+        $stmtR = $db->prepare("SELECT id_reservasi, id_tipe, status, tanggal_checkin, tanggal_checkout FROM reservasi WHERE id_reservasi = ? FOR UPDATE");
         $stmtR->execute([$currP['id_reservasi']]);
         $reservasi = $stmtR->fetch(PDO::FETCH_ASSOC);
 
@@ -961,6 +963,77 @@ function proses_status_transaksi_midtrans(string $orderId, array $statusData): a
                 ");
                 $stmtUpdate->execute([$metodeKelompok, $paymentType, $transactionId, $bankAtauToko, $kodePembayaran, $kedaluwarsaPada, $kodePembayaran, $catatanGanda, $dibayarPada, $currP['id_pembayaran']]);
                 error_log("PERINGATAN PEMBAYARAN GANDA: order_id {$orderId} tiba saat reservasi {$currP['id_reservasi']} sudah lunas.");
+            } elseif ($reservasi && $reservasi['status'] === 'kedaluwarsa') {
+                // PEMBAYARAN TERLAMBAT: settlement tiba saat reservasi sudah berstatus 'kedaluwarsa'
+                // Kunci tipe villa mutex
+                $stmtVillaLock = $db->prepare("SELECT jumlah_unit FROM tipe_villa WHERE id_tipe = ? FOR UPDATE");
+                $stmtVillaLock->execute([$reservasi['id_tipe']]);
+                $stmtVillaLock->fetch();
+
+                // Periksa ketersediaan kamar
+                $ketersediaan = hitung_ketersediaan((int)$reservasi['id_tipe'], $reservasi['tanggal_checkin'], $reservasi['tanggal_checkout'], $db);
+                $adaPenuh = false;
+                foreach ($ketersediaan['malam'] as $tgl => $malam) {
+                    if ($malam['status'] === 'penuh') {
+                        $adaPenuh = true;
+                        break;
+                    }
+                }
+
+                if (!$adaPenuh) {
+                    // Tanggal masih kosong -> reservasi kembali 'dikonfirmasi'
+                    $stmtReaktif = $db->prepare("
+                        UPDATE reservasi 
+                        SET status = 'dikonfirmasi',
+                            kedaluwarsa_pada = NULL
+                        WHERE id_reservasi = ?
+                    ");
+                    $stmtReaktif->execute([$currP['id_reservasi']]);
+
+                    catat_reservasi_log(
+                        $db,
+                        (int)$currP['id_reservasi'],
+                        'kedaluwarsa',
+                        'dikonfirmasi',
+                        null,
+                        'aktif kembali karena pembayaran terlambat'
+                    );
+
+                    // Catat pembayaran lunas normal
+                    $stmtUpdate = $db->prepare("
+                        UPDATE pembayaran 
+                        SET status = 'lunas',
+                            metode_kelompok = ?,
+                            metode_detail = ?,
+                            transaction_id = ?,
+                            bank_atau_toko = COALESCE(?, bank_atau_toko),
+                            kode_pembayaran = COALESCE(?, kode_pembayaran),
+                            kedaluwarsa_pada = COALESCE(?, kedaluwarsa_pada),
+                            kode_dibuat_pada = CASE WHEN kode_dibuat_pada IS NOT NULL THEN kode_dibuat_pada WHEN ? IS NOT NULL THEN NOW() ELSE NULL END,
+                            dibayar_pada = ?
+                        WHERE id_pembayaran = ?
+                    ");
+                    $stmtUpdate->execute([$metodeKelompok, $paymentType, $transactionId, $bankAtauToko, $kodePembayaran, $kedaluwarsaPada, $kodePembayaran, $dibayarPada, $currP['id_pembayaran']]);
+                } else {
+                    // Bentrok -> pembayaran ditandai 'ganda' dengan catatan 'perlu ditinjau: tanggal sudah terisi', reservasi tetap kedaluwarsa
+                    $catatanBentrok = "perlu ditinjau: tanggal sudah terisi";
+                    $stmtUpdate = $db->prepare("
+                        UPDATE pembayaran 
+                        SET status = 'ganda',
+                            metode_kelompok = ?,
+                            metode_detail = ?,
+                            transaction_id = ?,
+                            bank_atau_toko = COALESCE(?, bank_atau_toko),
+                            kode_pembayaran = COALESCE(?, kode_pembayaran),
+                            kedaluwarsa_pada = COALESCE(?, kedaluwarsa_pada),
+                            kode_dibuat_pada = CASE WHEN kode_dibuat_pada IS NOT NULL THEN kode_dibuat_pada WHEN ? IS NOT NULL THEN NOW() ELSE NULL END,
+                            catatan = ?,
+                            dibayar_pada = ?
+                        WHERE id_pembayaran = ?
+                    ");
+                    $stmtUpdate->execute([$metodeKelompok, $paymentType, $transactionId, $bankAtauToko, $kodePembayaran, $kedaluwarsaPada, $kodePembayaran, $catatanBentrok, $dibayarPada, $currP['id_pembayaran']]);
+                    error_log("PERINGATAN PEMBAYARAN TERLAMBAT BENTROK: order_id {$orderId} tiba untuk reservasi kedaluwarsa #{$currP['id_reservasi']} namun tanggal sudah terisi.");
+                }
             } else {
                 // Pembayaran lunas pertama yang sah
                 $stmtUpdate = $db->prepare("

@@ -44,6 +44,15 @@ if (!defined('MIDTRANS_CLIENT_KEY')) {
 if (!defined('MIDTRANS_IS_PRODUCTION')) {
     define('MIDTRANS_IS_PRODUCTION', (bool)($config['MIDTRANS_IS_PRODUCTION'] ?? false));
 }
+if (!defined('PEMBAYARAN_BATAS_JAM')) {
+    define('PEMBAYARAN_BATAS_JAM', (int)($config['PEMBAYARAN_BATAS_JAM'] ?? 24));
+}
+if (!defined('PEMBAYARAN_BATAS_MIN_JAM')) {
+    define('PEMBAYARAN_BATAS_MIN_JAM', (int)($config['PEMBAYARAN_BATAS_MIN_JAM'] ?? 2));
+}
+if (!defined('PEMBAYARAN_CHECKIN_BATAS_JAM')) {
+    define('PEMBAYARAN_CHECKIN_BATAS_JAM', (int)($config['PEMBAYARAN_CHECKIN_BATAS_JAM'] ?? 12));
+}
 
 // 4. Tentukan BASE_URL untuk <base href="...">
 if (!defined('BASE_URL')) {
@@ -61,4 +70,5 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/google_auth.php';
 require_once __DIR__ . '/email_verification.php';
+require_once __DIR__ . '/kedaluwarsa.php';
 

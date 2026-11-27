@@ -185,6 +185,7 @@ try {
         $userId
     ]);
     $idReservasi = (int)$pdo->lastInsertId();
+    catat_reservasi_log($pdo, $idReservasi, null, 'dikonfirmasi', $userId, 'Reservasi offline dibuat langsung (' . $sumber . ')');
 
     // Jika catat_tunai=true, buat record pembayaran tunai ATOMIK
     if ($catatTunai) {

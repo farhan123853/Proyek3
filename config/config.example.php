@@ -20,7 +20,9 @@ return [
     'MIDTRANS_SERVER_KEY'    => 'SB-Mid-server-ISI_DI_SINI',
     'MIDTRANS_CLIENT_KEY'    => 'SB-Mid-client-ISI_DI_SINI',
     'MIDTRANS_IS_PRODUCTION' => false,
-    'PEMBAYARAN_BATAS_JAM'   => 24,
+    'PEMBAYARAN_BATAS_JAM'         => 24,
+    'PEMBAYARAN_BATAS_MIN_JAM'     => 2,
+    'PEMBAYARAN_CHECKIN_BATAS_JAM' => 12,
 
     // ── Aplikasi & URL ───────────────────────────────────────
     // Digunakan sebagai <base href="..."> untuk konsistensi tautan dan path aset.

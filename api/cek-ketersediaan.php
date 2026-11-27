@@ -11,6 +11,9 @@
 
 require_once __DIR__ . '/../includes/bootstrap.php';
 
+// Pemicu oportunistik pemeriksaan kedaluwarsa reservasi
+pemicu_oportunistik_kedaluwarsa();
+
 header('Content-Type: application/json; charset=UTF-8');
 
 // ─── MODE KALENDER ───────────────────────────────────────────────────────────

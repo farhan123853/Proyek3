@@ -20,6 +20,7 @@ require_once __DIR__ . '/../includes/laporan.php';
 require_role(['pemilik', 'admin'], 'login.php');
 
 $pdo = get_db();
+pemicu_oportunistik_kedaluwarsa($pdo);
 
 // 1. Parameter Filter
 $tahunSekarang = (int)date('Y');

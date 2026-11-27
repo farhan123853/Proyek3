@@ -154,7 +154,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ]);
 
                     $idReservasi = $pdo->lastInsertId();
+                    catat_reservasi_log($pdo, (int)$idReservasi, null, 'menunggu', current_user_id(), 'Pengajuan reservasi baru online');
                     $pdo->commit();
+
+                    pemicu_oportunistik_kedaluwarsa($pdo);
 
                     flash_set('success', t('booking.booking_success', ['kode' => "#RSV-{$idReservasi}"]));
                     redirect('reservasi-saya.php');

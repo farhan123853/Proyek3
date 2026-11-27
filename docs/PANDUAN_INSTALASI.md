@@ -141,3 +141,51 @@ Akses URL: `http://localhost/website/index.php`
 | Popup Snap Midtrans tidak muncul | Kunci Client Key belum diisi atau format token tidak valid | Pastikan `MIDTRANS_CLIENT_KEY` dan `MIDTRANS_SERVER_KEY` sudah terisi di `config/config.php` serta koneksi internet aktif. |
 | Navigasi halaman dashboard rusak | `APP_URL` di `config.php` belum sesuai | Sesuaikan nilai `'APP_URL'` pada `config/config.php` dengan URL yang sedang diakses di browser. |
 | Tidak bisa konfirmasi reservasi | Kapasitas unit telah terpesan pada tanggal tumpang tindih | Hal ini merupakan fitur proteksi overbooking (T-08 & T-16). Periksa tanggal lain atau tolak pemesanan yang bentrok. |
+
+---
+
+## 6. Penjadwalan Otomatis Kedaluwarsa Reservasi
+
+Sistem memiliki skrip CLI `bin/expire-reservasi.php` yang memeriksa dan menutup reservasi yang telah melewati batas waktu pembayaran. Skrip ini **harus** dijadwalkan agar berjalan otomatis setiap 5-10 menit.
+
+> **Catatan:** Tanpa penjadwalan ini, pemeriksaan kedaluwarsa tetap berjalan secara oportunistik (setiap kali halaman dashboard/reservasi dimuat), tetapi tidak sereal-time penjadwalan khusus.
+
+### Windows (Task Scheduler)
+
+1. Buka **Task Scheduler** (`taskschd.msc`).
+2. Klik **Create Basic Task** → beri nama: `Villa Joglo - Expire Reservasi`.
+3. Trigger: **Daily**, ulangi setiap **5 menit** selama **1 hari**.
+4. Action: **Start a Program**
+   - Program/script: `C:\xampp\php\php.exe` (sesuaikan path PHP Anda)
+   - Add arguments: `bin\expire-reservasi.php`
+   - Start in: `C:\xampp\htdocs\website` (sesuaikan path proyek Anda)
+5. Pastikan opsi **Run whether user is logged on or not** dicentang.
+
+### Linux / macOS (Cron)
+
+Tambahkan baris ini ke crontab (`crontab -e`):
+
+```cron
+*/5 * * * * cd /var/www/website && /usr/bin/php bin/expire-reservasi.php >> /var/log/villa-expire.log 2>&1
+```
+
+### Verifikasi
+
+Jalankan manual untuk memastikan skrip berfungsi:
+
+```bash
+cd "c:\Users\Lenovo\Documents\PROYEK 3\website"
+php bin/expire-reservasi.php
+```
+
+Output yang diharapkan:
+```
+[2026-11-27 14:00:00 WIB] Memulai pengecekan reservasi kedaluwarsa...
+Hasil pengecekan:
+ - Reservasi diperiksa : 0
+ - Ditutup kedaluwarsa : 0
+ - Dilewati / aktif    : 0
+[2026-11-27 14:00:00 WIB] Selesai.
+```
+
+> **Keputusan Desain:** Reservasi offline/walk-in yang dikonfirmasi oleh Pengelola **tidak** memiliki batas bayar otomatis (`batas_bayar_pada = NULL`), sehingga tidak akan kedaluwarsa secara otomatis. Pengelola bertanggung jawab mengelola pembayaran reservasi offline secara manual.

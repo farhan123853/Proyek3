@@ -72,18 +72,35 @@ $nominal = (int)round((float)$reservasi['estimasi_total']);
 $batasJam = (int)($config['PEMBAYARAN_BATAS_JAM'] ?? 24);
 $gantiMetode = !empty($_POST['ganti_metode']);
 
-// 7. Cek apakah ada transaksi Midtrans 'menunggu' yang masih aktif dalam rentang batas jam
-// Keputusan: jika ada snap_token aktif yang masih dalam rentang waktu berlaku, pakai ulang token
-// KECUALI jika pengguna secara eksplisit meminta 'ganti_metode' (misal ganti dari BCA ke BNI)
+// Selaraskan sisa waktu pembayaran dengan batas_bayar_pada
+$batasBayarPada = $reservasi['batas_bayar_pada'] ?? null;
+if (!empty($batasBayarPada)) {
+    $tsBatas = strtotime($batasBayarPada);
+    $sisaDetik = $tsBatas - time();
+} else {
+    $sisaDetik = $batasJam * 3600;
+}
+
+$sisaMenit = (int)floor($sisaDetik / 60);
+$maxMenit = $batasJam * 60;
+$durasiMenit = min($maxMenit, $sisaMenit);
+
+// Midtrans menetapkan durasi minimal dalam satuan menit (minimal 5 menit)
+// Tolak pembuatan transaksi jika sisa waktu kurang dari 5 menit atau sudah lewat batas
+if ($durasiMenit < 5 || $sisaDetik <= 0) {
+    json_response(['ok' => false, 'pesan' => t('payment.deadline_passed_error')], 400);
+}
+
+// 7. Cek apakah ada transaksi Midtrans 'menunggu' yang masih aktif dalam rentang batas menit
 $stmt = $db->prepare("
     SELECT id_pembayaran, order_id, snap_token, dibuat_pada
     FROM pembayaran
     WHERE id_reservasi = ? AND status = 'menunggu' AND sumber = 'midtrans' AND snap_token IS NOT NULL
-      AND dibuat_pada >= (NOW() - INTERVAL ? HOUR)
+      AND dibuat_pada >= (NOW() - INTERVAL ? MINUTE)
     ORDER BY id_pembayaran DESC
     LIMIT 1
 ");
-$stmt->execute([$idReservasi, $batasJam]);
+$stmt->execute([$idReservasi, $durasiMenit]);
 $existing = $stmt->fetch();
 
 if ($existing && !empty($existing['snap_token'])) {
@@ -159,8 +176,8 @@ $params = [
     ],
     'customer_details' => $customerDetails,
     'expiry' => [
-        'unit' => 'hour',
-        'duration' => $batasJam,
+        'unit' => 'minute',
+        'duration' => $durasiMenit,
     ],
     // Dibatasi hanya VA bank dan e-wallet (tanpa kartu kredit)
     'enabled_payments' => [

@@ -15,6 +15,26 @@ require_login('login.php');
 $userId = current_user_id();
 $pdo = get_db();
 
+// Pemicu oportunistik pemeriksaan kedaluwarsa reservasi
+pemicu_oportunistik_kedaluwarsa($pdo);
+
+// Tangani Aksi POST Pelanggan: Pilih Bayar Tunai & Kembali Bayar Online
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi'])) {
+    csrf_verify();
+    $aksi = trim($_POST['aksi'] ?? '');
+    $idRes = (int)($_POST['id_reservasi'] ?? 0);
+
+    if ($aksi === 'pilih_bayar_tunai') {
+        $res = pelanggan_pilih_bayar_tunai($idRes, $userId);
+        flash_set($res['ok'] ? 'success' : 'danger', $res['pesan']);
+        redirect('reservasi-saya.php#card-rsv-' . $idRes);
+    } elseif ($aksi === 'kembali_bayar_online') {
+        $res = pelanggan_kembali_bayar_online($idRes, $userId);
+        flash_set($res['ok'] ? 'success' : 'danger', $res['pesan']);
+        redirect('reservasi-saya.php#card-rsv-' . $idRes);
+    }
+}
+
 // F-10: Query dikunci dengan id_pelanggan = current_user_id()
 $sql = "SELECT r.*, v.nama AS nama_villa, v.slug AS slug_villa, p.nama AS nama_pengelola
         FROM `reservasi` r
@@ -98,11 +118,18 @@ require_once __DIR__ . '/includes/layout/head.php';
           $statusBayar = $bayarInfo['status'];
           $pembayaranAktif = $bayarInfo['pembayaran'];
 
-          // Hitung batas waktu bayar (24 jam dari waktu reservasi dibuat / dikonfirmasi)
-          $waktuDibuat = strtotime($r['dibuat_pada']);
-          $batasWaktuTs = $waktuDibuat + (24 * 3600);
+          // Hitung batas waktu bayar dari kolom batas_bayar_pada di database
+          if (!empty($r['batas_bayar_pada'])) {
+              $batasWaktuTs = strtotime($r['batas_bayar_pada']);
+          } else {
+              // Fallback untuk reservasi lama yang belum punya batas_bayar_pada
+              $waktuDibuat = strtotime($r['dibuat_pada']);
+              $batasWaktuTs = $waktuDibuat + (PEMBAYARAN_BATAS_JAM * 3600);
+          }
           $isLewatBatas = (time() > $batasWaktuTs && $statusBayar !== 'lunas');
           $batasWaktuStr = date('d M Y, H:i', $batasWaktuTs) . ' WIB';
+          $sisaDetikBayar = max(0, $batasWaktuTs - time());
+          $rencanaBayar = $r['rencana_bayar'] ?? 'online';
 
           // Status label reservasi
           $resStatusLabel = format_status_reservasi($r['status']);

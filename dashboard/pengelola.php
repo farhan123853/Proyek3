@@ -19,6 +19,9 @@ require_role(['pengelola', 'admin'], 'login.php');
 $pdo = get_db();
 $currentUserId = current_user_id();
 
+// Pemicu oportunistik pemeriksaan kedaluwarsa reservasi
+pemicu_oportunistik_kedaluwarsa($pdo);
+
 // Daftar tipe villa untuk form reservasi offline dan blokir
 $villasList = $pdo->query("SELECT id_tipe, nama, kapasitas_maks FROM tipe_villa ORDER BY id_tipe ASC")->fetchAll();
 
@@ -43,6 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi'])) {
             // Update status menjadi ditolak
             $stmtTolak = $pdo->prepare("UPDATE `reservasi` SET `status` = 'ditolak', `diproses_oleh` = ? WHERE `id_reservasi` = ?");
             $stmtTolak->execute([$currentUserId, $idReservasi]);
+            catat_reservasi_log($pdo, $idReservasi, 'menunggu', 'ditolak', $currentUserId, 'Ditolak oleh Pengelola');
             flash_set('warning', "Reservasi #RSV-{$idReservasi} telah ditolak.");
             redirect('dashboard/pengelola.php');
         } elseif ($aksi === 'konfirmasi') {
@@ -87,9 +91,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi'])) {
                     redirect('dashboard/pengelola.php');
                 }
 
-                // 4. Update status ke dikonfirmasi
-                $stmtKonfirmasi = $pdo->prepare("UPDATE `reservasi` SET `status` = 'dikonfirmasi', `diproses_oleh` = ? WHERE `id_reservasi` = ?");
-                $stmtKonfirmasi->execute([$currentUserId, $idReservasi]);
+                // 4. Update status ke dikonfirmasi & tetapkan batas bayar online
+                $batasBayar = hitung_batas_bayar_online($target['tanggal_checkin'], 'now');
+                $stmtKonfirmasi = $pdo->prepare("UPDATE `reservasi` SET `status` = 'dikonfirmasi', `diproses_oleh` = ?, `batas_bayar_pada` = ? WHERE `id_reservasi` = ?");
+                $stmtKonfirmasi->execute([$currentUserId, $batasBayar, $idReservasi]);
+                catat_reservasi_log($pdo, $idReservasi, 'menunggu', 'dikonfirmasi', $currentUserId, 'Dikonfirmasi oleh Pengelola');
 
                 $pdo->commit();
                 flash_set('success', "Reservasi #RSV-{$idReservasi} berhasil dikonfirmasi!");
@@ -125,6 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi'])) {
                 }
                 $stmtBatal = $pdo->prepare("UPDATE reservasi SET status = 'dibatalkan' WHERE id_reservasi = ?");
                 $stmtBatal->execute([$idReservasi]);
+                catat_reservasi_log($pdo, $idReservasi, $cekR['status'], 'dibatalkan', $currentUserId, $alasanBatal);
                 $pdo->commit();
                 flash_set('success', t('offline.batal_success', ['kode' => "#RSV-{$idReservasi}"]));
                 redirect('dashboard/pengelola.php');
@@ -142,7 +149,7 @@ $filterStatus = trim($_GET['status'] ?? '');
 $filterBayar  = trim($_GET['bayar'] ?? '');
 $filterSumber = trim($_GET['sumber'] ?? '');
 
-$allowedStatus = ['menunggu', 'dikonfirmasi', 'ditolak', 'dibatalkan'];
+$allowedStatus = ['menunggu', 'dikonfirmasi', 'ditolak', 'dibatalkan', 'kedaluwarsa'];
 $allowedSumber = ['online', 'walk_in', 'whatsapp', 'telepon'];
 $whereClauses = [];
 $params = [];
@@ -225,11 +232,18 @@ foreach ($rawList as $r) {
     $r['bayar_pembayaran'] = $bayarInfo['pembayaran'];
     $r['bayar_history'] = $history;
 
-    // Evaluasi penanda lewat batas bayar (24 jam)
-    $tsDibuat = strtotime($r['dibuat_pada']);
-    $tsBatas = $tsDibuat + (24 * 3600);
+    // Evaluasi penanda lewat batas bayar dari kolom batas_bayar_pada di database
+    if (!empty($r['batas_bayar_pada'])) {
+        $tsBatas = strtotime($r['batas_bayar_pada']);
+    } else {
+        // Fallback untuk reservasi lama yang belum punya batas_bayar_pada
+        $tsDibuat = strtotime($r['dibuat_pada']);
+        $tsBatas = $tsDibuat + (PEMBAYARAN_BATAS_JAM * 3600);
+    }
     $r['is_lewat_batas'] = ($r['status'] === 'dikonfirmasi' && $statusBayar !== 'lunas' && time() > $tsBatas);
     $r['batas_waktu_str'] = date('d/m/Y H:i', $tsBatas) . ' WIB';
+    $r['sisa_detik_bayar'] = max(0, $tsBatas - time());
+    $r['rencana_bayar'] = $r['rencana_bayar'] ?? 'online';
 
     // Deteksi "bentrok": reservasi menunggu yang bertabrakan dengan yang sudah dikonfirmasi
     $r['is_bentrok'] = false;
@@ -254,6 +268,7 @@ foreach ($rawList as $r) {
 $statMenunggu = (int)$pdo->query("SELECT COUNT(*) FROM `reservasi` WHERE `status` = 'menunggu'")->fetchColumn();
 $statKonfirmasi = (int)$pdo->query("SELECT COUNT(*) FROM `reservasi` WHERE `status` = 'dikonfirmasi'")->fetchColumn();
 $statDitolak = (int)$pdo->query("SELECT COUNT(*) FROM `reservasi` WHERE `status` = 'ditolak'")->fetchColumn();
+$statKedaluwarsa = (int)$pdo->query("SELECT COUNT(*) FROM `reservasi` WHERE `status` = 'kedaluwarsa'")->fetchColumn();
 
 // Statistik pembayaran (pada reservasi dikonfirmasi)
 $statLunas = (int)$pdo->query("SELECT COUNT(DISTINCT id_reservasi) FROM `pembayaran` WHERE `status` = 'lunas'")->fetchColumn();

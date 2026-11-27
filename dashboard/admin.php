@@ -17,6 +17,7 @@ require_once __DIR__ . '/../includes/laporan.php';
 require_role('admin', 'login.php');
 
 $pdo = get_db();
+pemicu_oportunistik_kedaluwarsa($pdo);
 $currentAdminId = current_user_id();
 
 $formErrors = [];
